@@ -15,7 +15,7 @@
 - **Risk-Based Verification:**
   - `[UI / VISUAL]` tasks: Run quiet typecheck only. Zero unit tests required.
   - `[CORE / DATA]` tasks: Write and pass automated unit tests before marking complete.
-- **Non-Destructive 2-Strike Circuit Breaker:** Before editing target files on a slice, record a checkpoint (`git add -N .`). If a build or test command fails twice in a row with the same error, STOP guessing, restore only the active slice's target files (`git checkout HEAD -- <target-files>`), and output a `Needed from you:` block offering `/prep-audit diff`.
+- **Non-Destructive 2-Strike Circuit Breaker:** A slice-start checkpoint is saved automatically (`.spec/.slice-checkpoint`) when a task line is marked `[IN_PROGRESS]`. If a build or test command fails twice in a row with the same error, STOP guessing, restore only the active slice's target files (`node .harness/hooks/pre-tool-guard.mjs --restore`), and output a `Needed from you:` block offering `/prep-audit diff`.
 - **Zero Manual Script Burden:** Execute `.harness/scripts/*.mjs` via `node` directly on the user's behalf.
 
 ## Learned Operator Rules (Synced via `/learn`)
