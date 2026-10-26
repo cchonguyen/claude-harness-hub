@@ -1,0 +1,4 @@
+# Harness ephemeral session state
+.spec/.strike-counter.json
+.spec/.learn-staging.txt
+.spec/HANDOFF_PACKET.md

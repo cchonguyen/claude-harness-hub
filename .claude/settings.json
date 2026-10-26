@@ -1,0 +1,59 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node \"$CLAUDE_PROJECT_DIR\"/.harness/*)",
+      "Bash(node .harness/*)"
+    ],
+    "deny": [
+      "Read(**/.env*)",
+      "Edit(**/.env*)",
+      "Bash(* > .env*)",
+      "Bash(* >> .env*)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.harness/hooks/session-start.mjs\" || echo 'HARNESS WARNING: Node.js was not found, so the harness guards are OFF this session. Tell the operator: install Node.js 18+ from https://nodejs.org (LTS button), then restart Claude Code.'"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.harness/hooks/pre-tool-guard.mjs\""
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.harness/hooks/post-tool-scrub.mjs\""
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.harness/hooks/post-tool-failure.mjs\""
+          }
+        ]
+      }
+    ]
+  }
+}
