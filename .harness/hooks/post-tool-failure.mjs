@@ -39,7 +39,7 @@ if (strikes >= 2) {
   console.log(JSON.stringify({
     hookSpecificOutput: {
       hookEventName: 'PostToolUseFailure',
-      additionalContext: 'CIRCUIT BREAKER TRIGGERED (2 Consecutive Identical Test/Build Failures): Stop guessing immediately. Restore ONLY the active slice target files (git checkout HEAD -- <target-files>), and output a "Needed from you:" block offering /prep-audit diff.'
+      additionalContext: 'CIRCUIT BREAKER TRIGGERED (2 Consecutive Identical Test/Build Failures): Stop guessing immediately. Restore ONLY the active slice target files to the slice-start checkpoint (node .harness/hooks/pre-tool-guard.mjs --restore), and output a "Needed from you:" block offering /prep-audit diff.'
     }
   }));
 }
