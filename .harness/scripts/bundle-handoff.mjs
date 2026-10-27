@@ -20,9 +20,46 @@ const overview = readSafe('.spec/OVERVIEW.md');
 const spec = readSafe('.spec/SYSTEM_SPEC.md');
 const progress = readSafe('.spec/PROGRESS.md');
 
+// Local .md files that the spec/overview point to, via [text](file.md) links or bare REQUIREMENTS.md / ARCHITECTURE.md mentions
+const collectReferences = (sources) => {
+  const realRoot = fs.realpathSync(root);
+  const skip = new Set(sources.map(({ rel }) => rel));
+  skip.add('.spec/HANDOFF_PACKET.md');
+  const found = new Map();
+  for (const { rel, text } of sources) {
+    const candidates = [];
+    for (const m of text.matchAll(/\[[^\]]*\]\(\s*<?([^)\s>]+\.md)(?:#[^)\s>]*)?>?[^)]*\)/gi)) candidates.push(m[1]);
+    for (const m of text.matchAll(/[\w./-]*\b(?:REQUIREMENTS|ARCHITECTURE)\.md\b/g)) candidates.push(m[0]);
+    for (const raw of candidates) {
+      if (/^[a-z][a-z0-9+.-]*:/i.test(raw) || raw.startsWith('//')) continue;
+      let ref = raw;
+      try { ref = decodeURIComponent(raw); } catch { /* keep raw */ }
+      const bases = [path.dirname(path.join(root, rel)), root];
+      for (const base of bases) {
+        const abs = ref.startsWith('/') ? path.join(root, ref) : path.resolve(base, ref);
+        if (!fs.existsSync(abs) || !fs.statSync(abs).isFile()) continue;
+        const real = fs.realpathSync(abs);
+        const relPath = path.relative(realRoot, real).split(path.sep).join('/');
+        if (relPath.startsWith('..') || path.isAbsolute(relPath) || skip.has(relPath) || found.has(relPath)) continue;
+        found.set(relPath, fs.readFileSync(real, 'utf8'));
+        break;
+      }
+    }
+  }
+  return found;
+};
+
 let payload = '';
 if (mode === 'spec') {
   payload = `@arch-auditor Please conduct an adversarial architecture and scope audit on the following specification. Surface blind spots, edge cases, over-engineering, and verify [UI / VISUAL] vs [CORE / DATA] risk tags.\n\n# OVERVIEW\n${overview}\n\n# SYSTEM SPEC\n${spec}\n\n# PROGRESS & TASKS\n${progress}`;
+  const refs = collectReferences([
+    { rel: '.spec/SYSTEM_SPEC.md', text: spec },
+    { rel: '.spec/OVERVIEW.md', text: overview },
+  ]);
+  if (refs.size > 0) {
+    payload += '\n\n# APPENDED REFERENCES';
+    for (const [rel, text] of refs) payload += `\n\n## ${rel}\n${text}`;
+  }
 } else {
   // Diff against HEAD through a throwaway copy of the index, so intent-to-add never touches the real one
   let diff = '';
