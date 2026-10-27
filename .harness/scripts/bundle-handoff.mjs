@@ -24,16 +24,19 @@ let payload = '';
 if (mode === 'spec') {
   payload = `@arch-auditor Please conduct an adversarial architecture and scope audit on the following specification. Surface blind spots, edge cases, over-engineering, and verify [UI / VISUAL] vs [CORE / DATA] risk tags.\n\n# OVERVIEW\n${overview}\n\n# SYSTEM SPEC\n${spec}\n\n# PROGRESS & TASKS\n${progress}`;
 } else {
+  // Diff against HEAD through a throwaway copy of the index, so intent-to-add never touches the real one
   let diff = '';
+  const tmpIndex = path.join(os.tmpdir(), `harness-bundle-index-${process.pid}`);
+  const run = (cmd, env = {}) => execSync(cmd, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 10 * 1024 * 1024, env: { ...process.env, ...env } });
   try {
-    execSync('git add -N .', { cwd: root, stdio: 'ignore' });
-    diff = execSync('git diff HEAD', { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 10 * 1024 * 1024 });
+    const realIndex = path.resolve(root, run('git rev-parse --git-path index').trim());
+    if (fs.existsSync(realIndex)) fs.copyFileSync(realIndex, tmpIndex);
+    run('git add -N .', { GIT_INDEX_FILE: tmpIndex });
+    diff = run('git diff HEAD', { GIT_INDEX_FILE: tmpIndex });
   } catch {
-    try {
-      diff = execSync('git diff', { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 10 * 1024 * 1024 });
-    } catch {
-      diff = '_Unable to compute git diff (repository has no commits yet)_';
-    }
+    diff = '_Unable to compute git diff (not a git repo, or no commits yet)_';
+  } finally {
+    fs.rmSync(tmpIndex, { force: true });
   }
   payload = `@code-reviewer Please audit this implementation diff against our System Spec and active task slice. Identify bugs, security flaws, scope breaches, or regressions.\n\n# SYSTEM SPEC\n${spec}\n\n# ACTIVE PROGRESS\n${progress}\n\n# GIT DIFF\n\`\`\`diff\n${diff}\n\`\`\``;
 }
@@ -50,5 +53,5 @@ if (os.platform() === 'darwin') {
     console.log('✓ Packet written to .spec/HANDOFF_PACKET.md (Clipboard unavailable; open file to copy).');
   }
 } else {
-  console.log('✓ Non-macOS / Cloud environment: Packet saved to .spec/HANDOFF_PACKET.md (Open file in sidebar to copy without burning chat tokens).');
+  console.log(`✓ Packet saved to .spec/HANDOFF_PACKET.md (${payload.split('\n').length} lines); open it in the file panel to copy.`);
 }

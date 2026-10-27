@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { modeOf, readCheckpoints, ensureBaseline, diffSince } from './lib/vibe.mjs';
 
 const gitIn = (cwd, args, env = {}) =>
   execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'], env: { ...process.env, ...env } }).trim();
@@ -45,10 +46,32 @@ function captureCheckpoint() {
   }
 }
 
+// Vibe Mode restore: back to the last known green checkpoint. With no green yet, only list what changed.
+function restoreVibe() {
+  const all = readCheckpoints(root);
+  const sid = process.env.CLAUDE_SESSION_ID;
+  const entry = all[sid] || Object.values(all).sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)))[0];
+  if (!entry?.sha) {
+    console.log('✗ Nothing restored: no Vibe checkpoint exists for this project yet.');
+    process.exit(1);
+  }
+  const { restore, remove } = diffSince(root, entry.sha);
+  if (!entry.green) {
+    const all2 = [...restore, ...remove];
+    console.log(`⚠ Nothing has passed yet this session, so nothing was restored. ${all2.length} file(s) changed since the session baseline${all2.length ? `: ${all2.join(', ')}` : ''}. Offer the user a restore in the "Needed from you:" block.`);
+    process.exit(0);
+  }
+  if (restore.length) git(['restore', `--source=${entry.sha}`, '--worktree', '--', ...restore]);
+  for (const file of remove) fs.rmSync(path.join(root, file), { force: true });
+  console.log(`✓ Restored ${restore.length} file(s) to the last green checkpoint${remove.length ? `; removed ${remove.length} file(s) created since (${remove.join(', ')})` : ''}.`);
+  process.exit(0);
+}
+
 // `node .harness/hooks/pre-tool-guard.mjs --restore`: put the active slice's target files back to
 // the slice-start checkpoint. Files the slice created are removed; nothing else is touched.
 if (process.argv[2] === '--restore') {
   const lines = fs.existsSync(progressPath) ? fs.readFileSync(progressPath, 'utf8').split('\n') : [];
+  if (!lines.some((line) => ACTIVE_TASK.test(line))) restoreVibe();
   const targets = activeTargets(lines.find((line) => ACTIVE_TASK.test(line)));
   if (!targets.length) {
     console.log('✗ Nothing restored: no [IN_PROGRESS] task with "Target files:" in .spec/PROGRESS.md.');
@@ -98,6 +121,9 @@ const relTarget = path.relative(root, absTarget).replace(/\\/g, '/');
 // 0. Files outside the project (e.g. ~/.claude memory) are not governed by the slice lock
 if (relTarget.startsWith('../') || path.isAbsolute(relTarget)) process.exit(0);
 
+// Vibe Mode (0 active slices): edits are free, but make sure a baseline exists before the first change
+if (modeOf(root) === 'vibe') ensureBaseline(root, event.session_id || 'default');
+
 // 1. If editing .spec/PROGRESS.md itself, verify incoming text doesn't mark >1 task line as [IN_PROGRESS]
 if (relTarget === '.spec/PROGRESS.md') {
   const currentContent = fs.existsSync(progressPath) ? fs.readFileSync(progressPath, 'utf8') : '';
@@ -138,7 +164,7 @@ if (fs.existsSync(progressPath)) {
   const activeLines = lines.filter((line) => ACTIVE_TASK.test(line));
 
   if (activeLines.length > 1) {
-    console.error('WORK LOCK VIOLATION: Multiple tasks are marked [IN_PROGRESS] in .spec/PROGRESS.md. Fix .spec/PROGRESS.md first.');
+    console.error('WORK LOCK VIOLATION: Multiple tasks are marked [IN_PROGRESS] in .spec/PROGRESS.md. Keep only 1 active slice (or clear them all for Vibe Mode), then retry.');
     process.exit(2);
   }
 

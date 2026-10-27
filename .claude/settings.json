@@ -2,10 +2,18 @@
   "permissions": {
     "allow": [
       "Bash(node \"$CLAUDE_PROJECT_DIR\"/.harness/*)",
-      "Bash(node .harness/*)"
+      "Bash(node .harness/*)",
+      "Read(**/.env.example)",
+      "Read(**/.env.template)"
     ],
     "deny": [
-      "Read(**/.env*)",
+      "Read(**/.env)",
+      "Read(**/.env.[!et]*)",
+      "Read(**/.env.e[!x]*)",
+      "Read(**/.env.ex[!a]*)",
+      "Read(**/.env.t[!e]*)",
+      "Read(**/.env.te[!m]*)",
+      "Read(**/.env.*.local)",
       "Edit(**/.env*)",
       "Bash(* > .env*)",
       "Bash(* >> .env*)"

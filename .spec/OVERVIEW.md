@@ -7,6 +7,6 @@
 - None required (Zero-API-Cost Gemini Web Clipboard Bridge).
 
 ## Current Build Status
-- **Live & Verified:** Core v2.0 Harness Scaffolding
+- **Live & Verified:** Core v2.0 Harness Scaffolding; Vibe Mode (edit freely when no slice is active, auto-checkpoint at session start, "last known green" restore), Python test/lint support, hub sync from an attached sibling repo
 - **In Progress:** None
 - **Up Next:** Connect first spoke project
