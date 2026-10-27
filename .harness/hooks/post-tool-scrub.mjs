@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
 import path from 'node:path';
-import { isTestOrBuild as matchRunner } from './lib/runner-matcher.mjs';
+import { isTestOrBuild as matchRunner, advancesGreen } from './lib/runner-matcher.mjs';
 import { modeOf, saveCheckpoint, resolveRoot } from './lib/vibe.mjs';
 
 const root = resolveRoot();
@@ -26,8 +26,8 @@ if (isTestOrBuild && fs.existsSync(stateFile)) {
   } catch {}
 }
 
-// 1b. Vibe Mode: a passing check advances the "last known green" checkpoint (PostToolUse only fires on success)
-if (isTestOrBuild && modeOf(root) === 'vibe') saveCheckpoint(root, sessionId, true);
+// 1b. Vibe Mode: a passing test or build advances the "last known green" checkpoint (PostToolUse only fires on success); lint/typecheck passes do not
+if (advancesGreen(cmd) && modeOf(root) === 'vibe') saveCheckpoint(root, sessionId, true);
 
 // 2. Scrub overly verbose passing stdout (>40 lines) to save context tokens
 const response = event.tool_response;
