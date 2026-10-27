@@ -6,7 +6,7 @@ disable-model-invocation: true
 ---
 Bundle status: !`node "${CLAUDE_PROJECT_DIR}/.harness/scripts/bundle-handoff.mjs" $ARGUMENTS`
 
-Do NOT print `.spec/HANDOFF_PACKET.md` into the chat window (to save output tokens). Output ONLY the following action block:
+Do NOT print `.spec/HANDOFF_PACKET.md` into the chat window (to save output tokens). Output the 1-line bundle status above, then ONLY the following action block:
 
 ---
 Needed from you:

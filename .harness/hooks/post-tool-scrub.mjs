@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
 import path from 'node:path';
+import { isTestOrBuild as matchRunner } from './lib/runner-matcher.mjs';
+import { modeOf, saveCheckpoint, resolveRoot } from './lib/vibe.mjs';
 
-const root = process.env.CLAUDE_PROJECT_DIR || process.cwd();
+const root = resolveRoot();
 const stateFile = path.join(root, '.spec', '.strike-counter.json');
 
 let event = {};
@@ -11,7 +13,7 @@ try { event = JSON.parse(fs.readFileSync(0, 'utf8')); } catch { process.exit(0);
 const sessionId = event.session_id || 'default';
 const cmd = event.tool_input?.command || '';
 // Only real test/build runners, so `cat test/x` or `git commit -m "build"` are never touched
-const isTestOrBuild = /\b(vitest|jest|tsc|eslint|typecheck)\b|\b(npm|pnpm|yarn|bun)\s+(run\s+)?(test|build|lint|typecheck)\b/i.test(cmd);
+const isTestOrBuild = matchRunner(cmd);
 
 // 1. Reset strike counter for this session when a test/build command succeeds
 if (isTestOrBuild && fs.existsSync(stateFile)) {
@@ -23,6 +25,9 @@ if (isTestOrBuild && fs.existsSync(stateFile)) {
     }
   } catch {}
 }
+
+// 1b. Vibe Mode: a passing check advances the "last known green" checkpoint (PostToolUse only fires on success)
+if (isTestOrBuild && modeOf(root) === 'vibe') saveCheckpoint(root, sessionId, true);
 
 // 2. Scrub overly verbose passing stdout (>40 lines) to save context tokens
 const response = event.tool_response;
