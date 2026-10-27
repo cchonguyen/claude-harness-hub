@@ -20,3 +20,8 @@
 1. **Hub pointer:** every spoke commits `.harness/hub.json`, e.g. `{ "repo": "claude-harness-hub", "owner": "cchonguyen", "branch": "main" }`.
 2. **Discovery:** `hub-sync.mjs` looks for a sibling checkout at `../<repo>` (the layout a Cloud container uses when both repos are attached to the session). If none is found, it prints a `HUB_NOT_ATTACHED` error with the settings steps to attach the hub repo, and exits without changing anything. An existing `harness-hub` git remote is honoured as a fallback but is never created.
 3. **Sync boundary:** sync overwrites only engine files (`.claude/`, `.harness/`, `.harness-version`). Project-owned files (`.spec/`, root `CLAUDE.md`) are never written by sync.
+
+### Vibe Mode Checkpoint Rule
+- The "last known green" checkpoint advances only when a command that executes code passes: test runners (`vitest`, `jest`, `pytest`, `npm|pnpm|yarn|bun test`) or a build (`npm|pnpm|yarn|bun run build`).
+- Static checks (`eslint`, `ruff check`, `ruff format --check`, `mypy`, `pyright`, `tsc`, `typecheck`, `lint` scripts) still count toward the circuit breaker and still get their output scrubbed, but a pass never advances the checkpoint. Lint-clean code can still be logically broken, and locking it in would make a restore land on a regression.
+- If a project has no test or build command, no checkpoint ever advances; `--restore` then only lists the changed files, as it does before the first pass.
