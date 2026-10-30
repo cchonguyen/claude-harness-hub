@@ -1,8 +1,8 @@
 # SESSION HANDOFF
 - **Last Active Platform:** Claude Code Web
-- **Active Branch / State:** claude/pr-scope-check (advisory PR review: scope script and `/review-pr` command). No slice in progress (Vibe Mode). The AI Studio protocol is merged (PR #8).
-- **Files Modified in Last Turn:** `.harness/scripts/pr-scope-check.mjs` (new), `.claude/commands/review-pr.md` (new), `.spec/DECISIONS.md`, `.spec/SESSION_HANDOFF.md`
-- **Verification Status:** `pr-scope-check.mjs` passes `node --check`. Tested on three cases: PR #8's diff is CLEAN in Vibe Mode. An empty diff is flagged. A slice fixture flags a file outside Target files. Unverified: `/review-pr` run end to end on a real PR.
-- **Immediate Next Step:** Open the PR for `claude/pr-scope-check`, then run `/review-pr` on it as a live test.
+- **Active Branch / State:** claude/project-thread-ow4tdk (AI Studio probe fixes). No slice in progress (Vibe Mode).
+- **Files Modified in Last Turn:** `.harness/hooks/session-start.mjs`, `.harness/hooks/pre-tool-guard.mjs`, `.claude/harness-rules.md`, `CLAUDE.md`, `.spec/SESSION_HANDOFF.md`
+- **Verification Status:** `node --test .harness/hooks/lib/runner-matcher.test.mjs` passes (3/3). Hook changes checked by hand in a scratch spoke and hub fixture: engine edits blocked in a spoke slice, allowed in the hub and in Vibe Mode; AI Studio handoff injected in Vibe Mode.
+- **Immediate Next Step:** Charlie reviews and merges the probe-fixes PR. Probe items 1 and 2 were already on main.
 - **Active Slice:** none (Vibe Mode)
 - **Blockers / Open Decisions:** Charlie confirmed the advisory review flow: Claude posts a verdict, and Charlie merges. Auto-merge is not built.

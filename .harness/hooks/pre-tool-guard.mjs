@@ -153,8 +153,17 @@ if (relTarget === '.spec/PROGRESS.md') {
   process.exit(0);
 }
 
-// 2. Always permit edits to .spec/, .claude/, .harness/, or CLAUDE.md
-if (relTarget.startsWith('.spec/') || relTarget.startsWith('.claude/') || relTarget.startsWith('.harness/') || relTarget === 'CLAUDE.md') {
+// 2. Always permit edits to .spec/ or CLAUDE.md. Engine files (.claude/, .harness/, .harness-version) are
+// editable in the hub repo itself; in a spoke, sync owns them, so a slice must list them in Target files:
+const isEnginePath = relTarget.startsWith('.claude/') || relTarget.startsWith('.harness/') || relTarget === '.harness-version';
+const isHubRepo = (() => {
+  let repo = 'claude-harness-hub';
+  try { repo = JSON.parse(fs.readFileSync(path.join(root, '.harness', 'hub.json'), 'utf8')).repo || repo; } catch {}
+  let origin = '';
+  try { origin = git(['remote', 'get-url', 'origin']); } catch {}
+  return path.basename(root) === repo || new RegExp(`[/:]${repo}(\\.git)?$`).test(origin);
+})();
+if (relTarget.startsWith('.spec/') || relTarget === 'CLAUDE.md' || (isEnginePath && (isHubRepo || modeOf(root) !== 'slice'))) {
   process.exit(0);
 }
 

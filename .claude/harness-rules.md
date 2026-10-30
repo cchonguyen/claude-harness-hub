@@ -1,4 +1,4 @@
-# Claude Code Harness Contract (v2.0)
+# Claude Code Harness Contract (v2.2)
 
 ## Core Communication & Anti-Churn Rules
 - **Substantive Inception:** Start immediately with output or action. Zero pleasantries, apologies, or filler.
