@@ -19,7 +19,7 @@
 ### Spoke Connection Contract
 1. **Hub pointer:** every spoke commits `.harness/hub.json`, e.g. `{ "repo": "claude-harness-hub", "owner": "cchonguyen", "branch": "main" }`.
 2. **Discovery:** `hub-sync.mjs` looks for a sibling checkout at `../<repo>` (the layout a Cloud container uses when both repos are attached to the session). If none is found, it prints a `HUB_NOT_ATTACHED` error with the settings steps to attach the hub repo, and exits without changing anything. An existing `harness-hub` git remote is honoured as a fallback but is never created.
-3. **Sync boundary:** sync overwrites only engine files (`.claude/`, `.harness/`, `.harness-version`). Project-owned files (`.spec/`, root `CLAUDE.md`) are never overwritten by sync. The one exception is the spoke templates listed in `TEMPLATE_PATHS` in `hub-sync.mjs` (currently `.spec/AI_STUDIO_RULES.md`). Sync copies those only when the spoke does not already have the file, so a spoke's local edits are kept.
+3. **Sync boundary:** sync overwrites only engine files (`.claude/`, `.harness/`, `.harness-version`). Project-owned files (`.spec/`, root `CLAUDE.md`) are never written by sync.
 
 ### Vibe Mode Checkpoint Rule
 - The "last known green" checkpoint advances only when a command that executes code passes: test runners (`vitest`, `jest`, `pytest`, `node --test`, `npm|pnpm|yarn|bun test`) or a build (`npm|pnpm|yarn|bun run build`).
