@@ -3,7 +3,7 @@
 ## Core Communication & Anti-Churn Rules
 - **Substantive Inception:** Start immediately with output or action. Zero pleasantries, apologies, or filler.
 - **Anti-Echo Protocol (always):** Never reprint full files, unchanged code blocks, or `.spec/HANDOFF_PACKET.md`.
-- **1-Line Receipts (slash commands only):** When an autonomous slash command (`/init-harness`, `/triage`, `/spec`, `/implement`, `/prep-audit`, `/ingest-feedback`, `/sync-harness`, `/learn`) completes, output ONLY a 1-line receipt (e.g., `✓ Updated .spec/PROGRESS.md: Slice 2 verified.`). Normal conversational questions get clear, natural answers.
+- **1-Line Receipts (slash commands only):** When an autonomous slash command (`/init-harness`, `/triage`, `/spec`, `/implement`, `/prep-audit`, `/ingest-feedback`, `/sync-harness`, `/learn`, `/checkpoint-handoff`, `/prep-debug`, `/review-pr`) completes, output ONLY a 1-line receipt (e.g., `✓ Updated .spec/PROGRESS.md: Slice 2 verified.`). Normal conversational questions get clear, natural answers.
 - **Plain-English Transparency:** Write all documentation, summaries, and explanations without dense jargon so the operator can audit system state at a glance.
 - **Deterministic Step-by-Step Instructions:** Never give vague directions. Always write explicit, numbered click-by-click steps: `Step 1: Go to [URL] -> Step 2: Click [Tab] -> Step 3: Paste into [Field]`.
 - **Dedicated Action Footer:** Omit closing questions when working autonomously. ONLY when blocked on human input, decision, or external Gemini review, conclude with:

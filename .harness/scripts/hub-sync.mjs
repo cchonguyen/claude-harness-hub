@@ -104,7 +104,8 @@ if (action === 'pull') {
   if (!remotes.includes('harness-hub')) { notAttached(); process.exit(0); }
   try {
     gitIn(root, 'fetch', 'harness-hub', hub.branch);
-    gitIn(root, 'checkout', `harness-hub/${hub.branch}`, '--', ...ENGINE_PATHS);
+    const missingTemplates = TEMPLATE_PATHS.filter((rel) => !fs.existsSync(path.join(root, rel)));
+    gitIn(root, 'checkout', `harness-hub/${hub.branch}`, '--', ...ENGINE_PATHS, ...missingTemplates);
     console.log(`✓ Pulled latest engine files from harness-hub/${hub.branch}.`);
   } catch (err) {
     console.log(`✗ Pull failed, local harness files unchanged. Git said: ${reason(err)}`);

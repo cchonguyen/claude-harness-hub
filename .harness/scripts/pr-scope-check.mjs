@@ -33,8 +33,11 @@ if (active.length > 1) {
 } else if (active.length === 1) {
   const targets = (active[0].match(/Target files:\s*(.+)$/i)?.[1] || '')
     .replace(/[`*]/g, '').split(',').map((s) => s.trim().replace(/^\.\//, '')).filter(Boolean);
+  // Same rule as the guard hook: exact file, or a file inside a listed folder
+  const isAllowed = (file, allowed) =>
+    file === allowed || file.startsWith(allowed.endsWith('/') ? allowed : `${allowed}/`);
   for (const file of changed) {
-    if (file.startsWith('.spec/') || targets.includes(file)) continue;
+    if (file.startsWith('.spec/') || file === 'CLAUDE.md' || targets.some((t) => isAllowed(file, t))) continue;
     problems.push(`Outside the active slice's Target files: ${file}`);
   }
 } else {
@@ -43,7 +46,7 @@ if (active.length > 1) {
 
 // Engine files are owned by the hub. A spoke PR should not change them.
 for (const file of changed) {
-  if (file.startsWith('.claude/') || file.startsWith('.harness/')) notes.push(`Engine file changed: ${file}. Confirm this is intended.`);
+  if (file.startsWith('.claude/') || file.startsWith('.harness/') || file === '.harness-version') notes.push(`Engine file changed: ${file}. Confirm this is intended.`);
   if (MANIFEST.test(file)) notes.push(`Dependency manifest changed: ${file}. Confirm the request needed it.`);
 }
 

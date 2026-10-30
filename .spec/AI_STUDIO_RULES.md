@@ -21,7 +21,7 @@ If the request conflicts with the work mode, stop and ask the person which task 
 
 ### 2. Strict Scope Guard
 - In Slice Mode, edit only the `Target files:` of the `[IN_PROGRESS]` slice, plus files under `.spec/`.
-- Never edit anything under `.claude/` or `.harness/`. Those are harness engine files and are managed only from the hub repository.
+- Never edit anything under `.claude/`, `.harness/`, or `.harness-version`. Those are harness engine files and are managed only from the hub repository.
 - Do not add a dependency, package, or lockfile change unless the person's request or the active slice names it.
 - Do not delete files unless the request explicitly asks for a deletion.
 - If a fix needs a file outside scope, do not edit it. Write the file path and the reason into `.spec/SESSION_HANDOFF.md` under "Immediate Next Step" and stop.
@@ -40,6 +40,7 @@ Before you commit or push, do both of these:
    - **Files Modified in Last Turn:** every changed file path
    - **Verification Status:** each check with its result, or "unverified"
    - **Immediate Next Step:** one sentence for the incoming model
+   - **Active Slice:** the `[IN_PROGRESS]` slice line, or "none (Vibe Mode)"
 
 ### 5. Git Rules
 - Commit on the branch named in the request. Never push to `main` directly.
