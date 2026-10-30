@@ -36,4 +36,4 @@
 
 ## Learned Operator Rules (Synced via `/learn`)
 - Always preserve plain-English auditability in `.spec/OVERVIEW.md` at major feature milestones.
-- When giving the operator steps to run in Terminal, use labelled, one-per-stage fenced code blocks with full absolute paths and the expected result after each block.
+- When giving the operator steps to run in Terminal, always use labelled, one-per-stage fenced code blocks with full absolute paths and the expected result after each block. Every command must be complete and paste-ready: never a partial snippet, never "run the same as before", and never a path the operator has not confirmed. Before writing Terminal steps, confirm the project folder with a directory listing.
