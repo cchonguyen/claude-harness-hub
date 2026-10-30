@@ -36,3 +36,4 @@
 
 ## Learned Operator Rules (Synced via `/learn`)
 - Always preserve plain-English auditability in `.spec/OVERVIEW.md` at major feature milestones.
+- When giving the operator steps to run in Terminal, use labelled, one-per-stage fenced code blocks with full absolute paths and the expected result after each block.
