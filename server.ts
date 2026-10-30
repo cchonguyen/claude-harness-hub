@@ -2,10 +2,9 @@ import express from 'express';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
-import { exec, execFile } from 'child_process';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
 
-const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);
 
 const __filename = fileURLToPath(import.meta.url);
@@ -363,7 +362,7 @@ app.post('/api/runner/classify', (req, res) => {
 app.post('/api/tests/run', async (req, res) => {
   const start = Date.now();
   try {
-    const { stdout, stderr } = await execAsync('node --test .harness/hooks/lib/runner-matcher.test.mjs', { cwd: root });
+    const { stdout, stderr } = await execFileAsync('node', ['--test', '.harness/hooks/lib/runner-matcher.test.mjs'], { cwd: root });
     const durationMs = Date.now() - start;
     res.json({
       success: true,
@@ -382,11 +381,16 @@ app.post('/api/tests/run', async (req, res) => {
 });
 
 // 9. Bundle Handoff Generator API
+const ALLOWED_HANDOFF_MODES = new Set(['spec', 'diff', 'arch', 'overview']);
+
 app.post('/api/bundle-handoff', async (req, res) => {
   try {
-    const mode = req.body.mode || 'spec';
+    const mode = typeof req.body?.mode === 'string' ? req.body.mode.toLowerCase() : 'spec';
+    if (!ALLOWED_HANDOFF_MODES.has(mode)) {
+      return res.status(400).json({ error: 'Invalid mode. Allowed values: spec, diff, arch, overview' });
+    }
     const scriptPath = path.join(root, '.harness', 'scripts', 'bundle-handoff.mjs');
-    const { stdout, stderr } = await execAsync(`node "${scriptPath}" ${mode}`, { cwd: root });
+    const { stdout, stderr } = await execFileAsync('node', [scriptPath, mode], { cwd: root });
     const packetContent = readSafe('.spec/HANDOFF_PACKET.md');
 
     res.json({
@@ -401,6 +405,8 @@ app.post('/api/bundle-handoff', async (req, res) => {
 });
 
 // Serve frontend in production or mount Vite middleware in development
+const HOST = process.env.HOST || '127.0.0.1';
+
 async function startServer() {
   if (process.env.NODE_ENV === 'production') {
     const distPath = path.resolve(__dirname, 'dist');
@@ -411,15 +417,16 @@ async function startServer() {
   } else {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
-      server: { middlewareMode: true, host: '0.0.0.0', port: PORT },
+      server: { middlewareMode: true, host: HOST, port: PORT },
       appType: 'spa'
     });
     app.use(vite.middlewares);
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`[Claude Harness Hub] Server active on http://0.0.0.0:${PORT}`);
+  app.listen(PORT, HOST, () => {
+    console.log(`[Claude Harness Hub] Server active on http://${HOST}:${PORT}`);
   });
 }
 
 startServer();
+

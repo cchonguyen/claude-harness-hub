@@ -57,3 +57,28 @@ export interface RunnerClassification {
   advancesGreen: boolean;
   reason: string;
 }
+
+export type TabId = 'overview' | 'runner' | 'agents' | 'commands' | 'handoff' | 'specs' | 'spoke' | 'security';
+
+export type HandoffMode = 'spec' | 'diff' | 'arch' | 'overview';
+
+export type SliceActionType = 'activate' | 'complete' | 'uncheck' | 'clear-all';
+
+export interface NewSliceInput {
+  number: string;
+  description: string;
+  isCore: boolean;
+  targetFiles: string;
+}
+
+export interface ParsedSlice {
+  index: number;
+  completed: boolean;
+  inProgress: boolean;
+  title: string;
+  tag: string;
+  description: string;
+  targetFiles: string;
+  raw: string;
+}
+

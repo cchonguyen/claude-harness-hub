@@ -2,7 +2,6 @@
   "name": "Claude Harness Hub",
   "description": "Centralized control dashboard, agent inspector, spec manager, and runner test hub for Claude Code agent harnesses.",
   "permissions": [],
-  "capabilities": [
-    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
-  ]
+  "capabilities": []
 }
+
