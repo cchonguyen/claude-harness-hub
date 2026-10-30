@@ -4,3 +4,5 @@
 .spec/HANDOFF_PACKET.md
 .spec/.slice-checkpoint
 .spec/.vibe-checkpoint.json
+node_modules/
+dist/

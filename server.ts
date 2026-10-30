@@ -92,6 +92,7 @@ const SPEC_FILE_PATHS = [
   '.spec/SYSTEM_SPEC.md',
   '.spec/DECISIONS.md',
   '.spec/SESSION_HANDOFF.md',
+  '.spec/AI_STUDIO_RULES.md',
   'CLAUDE.md',
   '.claude/harness-rules.md'
 ];
