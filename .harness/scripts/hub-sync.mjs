@@ -11,6 +11,8 @@ const root = process.env.CLAUDE_PROJECT_DIR || gitRoot() || process.cwd();
 const action = (process.argv[2] || 'pull').toLowerCase();
 const stagingFile = path.join(root, '.spec', '.learn-staging.txt');
 const ENGINE_PATHS = ['.claude', '.harness', '.harness-version'];
+// Spoke-owned templates: copied only when the spoke does not have the file yet, so local edits survive a sync
+const TEMPLATE_PATHS = ['.spec/AI_STUDIO_RULES.md'];
 const hub = (() => {
   try { return { repo: 'claude-harness-hub', branch: 'main', ...JSON.parse(fs.readFileSync(path.join(root, '.harness', 'hub.json'), 'utf8')) }; } catch { return { repo: 'claude-harness-hub', branch: 'main' }; }
 })();
@@ -77,12 +79,23 @@ const copyEngine = (from, to) => {
   }
 };
 
+const copyTemplatesIfMissing = (from, to) => {
+  for (const rel of TEMPLATE_PATHS) {
+    const src = path.join(from, rel);
+    const dest = path.join(to, rel);
+    if (!fs.existsSync(src) || fs.existsSync(dest)) continue;
+    fs.mkdirSync(path.dirname(dest), { recursive: true });
+    fs.cpSync(src, dest);
+  }
+};
+
 if (action === 'pull') {
   if (sibling) {
     try { gitIn(sibling, 'pull', '--ff-only', '--quiet'); } catch {} // best effort; offline copy still works
     copyEngine(sibling, root);
+    copyTemplatesIfMissing(sibling, root);
     const version = fs.readFileSync(path.join(root, '.harness-version'), 'utf8').trim();
-    console.log(`✓ Pulled .claude/ and .harness/ engine files from ${path.relative(root, sibling) || sibling} (harness v${version}). CLAUDE.md and .spec/ untouched.`);
+    console.log(`✓ Pulled .claude/ and .harness/ engine files from ${path.relative(root, sibling) || sibling} (harness v${version}). CLAUDE.md and .spec/ untouched, except any missing template files, which were added.`);
     process.exit(0);
   }
   // Fallback: an explicit harness-hub git remote
