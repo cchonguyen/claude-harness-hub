@@ -163,7 +163,7 @@ const isHubRepo = (() => {
   try { origin = git(['remote', 'get-url', 'origin']); } catch {}
   return path.basename(root) === repo || new RegExp(`[/:]${repo}(\\.git)?$`).test(origin);
 })();
-if (relTarget.startsWith('.spec/') || relTarget === 'CLAUDE.md' || (isEnginePath && (isHubRepo || modeOf(root) !== 'slice'))) {
+if (relTarget.startsWith('.spec/') || relTarget === 'CLAUDE.md' || (isEnginePath && (modeOf(root) === 'vibe' || (isHubRepo && modeOf(root) === 'slice')))) {
   process.exit(0);
 }
 

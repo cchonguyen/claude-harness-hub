@@ -27,7 +27,7 @@ const STUB_LINES = 60;
 // Never inline secrets, dependencies, git internals or the packet itself
 const blocked = (rel) => {
   const parts = rel.split('/');
-  return rel === '.spec/HANDOFF_PACKET.md'
+  return rel === '.spec/HANDOFF_PACKET.md' || rel === '.spec/DEBUG_PACKET.md'
     || parts.some((p) => p === 'node_modules' || p === '.git' || p.startsWith('.env') || p.startsWith('.dev.vars'));
 };
 
@@ -88,7 +88,7 @@ if (mode === 'diff') {
   const tmpIndex = path.join(os.tmpdir(), `harness-bundle-index-${process.pid}`);
   const run = (cmd, env = {}) => execSync(cmd, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 10 * 1024 * 1024, env: { ...process.env, ...env } });
   // The packet itself and secret files never enter the diff, even when a repo forgot to ignore them
-  const scope = "-- . ':(exclude).spec/HANDOFF_PACKET.md' ':(exclude,glob)**/.env*' ':(exclude,glob)**/.dev.vars*'";
+  const scope = "-- . ':(exclude).spec/HANDOFF_PACKET.md' ':(exclude).spec/DEBUG_PACKET.md' ':(exclude,glob)**/.env*' ':(exclude,glob)**/.dev.vars*'";
   try {
     const realIndex = path.resolve(root, run('git rev-parse --git-path index').trim());
     if (fs.existsSync(realIndex)) fs.copyFileSync(realIndex, tmpIndex);
