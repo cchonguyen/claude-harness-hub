@@ -1,3 +1,13 @@
+export interface SessionHandoffSummary {
+  lastPlatform: string;
+  activeBranchState: string;
+  filesModified: string;
+  verificationStatus: string;
+  immediateNextStep: string;
+  activeSlice: string;
+  updatedAt: string | null;
+}
+
 export interface HarnessStatus {
   version: string;
   hubConfig: {
@@ -9,18 +19,28 @@ export interface HarnessStatus {
   activeCount: number;
   activeLines: string[];
   hasSliceCheckpoint: boolean;
-  checkpoints: Record<string, {
-    sha: string;
-    green: boolean;
-    updatedAt: string;
-  }>;
-  strikes: Record<string, {
-    strikes: number;
-    lastSig: string;
-    updatedAt: string;
-  }>;
+  checkpoints: Record<
+    string,
+    {
+      sha: string;
+      green: boolean;
+      updatedAt: string;
+    }
+  >;
+  strikes: Record<
+    string,
+    {
+      strikes: number;
+      lastSig: string;
+      updatedAt: string;
+    }
+  >;
   root: string;
+  progressMtime: string | null;
+  sessionHandoff: SessionHandoffSummary;
 }
+
+export type FileOwnership = 'editable' | 'template' | 'harness-owned';
 
 export interface SpecFile {
   path: string;
@@ -29,6 +49,9 @@ export interface SpecFile {
   mtime: string | null;
   size: number;
   lineCount: number;
+  ownership: FileOwnership;
+  ownershipLabel: string;
+  readOnly: boolean;
 }
 
 export interface Agent {
@@ -58,7 +81,68 @@ export interface RunnerClassification {
   reason: string;
 }
 
-export type TabId = 'overview' | 'runner' | 'agents' | 'commands' | 'handoff' | 'specs' | 'spoke' | 'security';
+export type AllowListedCommandId = 'unit-tests' | 'typecheck' | 'lint';
+
+export interface TestRunRecord {
+  commandId: AllowListedCommandId;
+  commandLabel: string;
+  success: boolean;
+  stdout: string;
+  stderr?: string;
+  durationMs: number;
+  ranAt: string;
+}
+
+export interface HandoffState {
+  exists: boolean;
+  mode: HandoffMode;
+  receipt: string | null;
+  packetContent: string;
+  lineCount: number;
+  includedFiles: string[];
+  packetMtime: string | null;
+  progressMtime: string | null;
+  isStale: boolean;
+  staleReason: string | null;
+}
+
+export interface SpokeDiffItem {
+  path: string;
+  status:
+    | 'identical'
+    | 'modified'
+    | 'missing-in-spoke'
+    | 'extra-in-spoke'
+    | 'template-preserved'
+    | 'template-missing';
+}
+
+export interface SpokeStatus {
+  isHubRepo: boolean;
+  hubAttached: boolean;
+  attachMethod: 'self-hub' | 'sibling' | 'git-remote' | 'unattached';
+  hubPath: string | null;
+  hubConfig: {
+    repo: string;
+    owner: string;
+    branch: string;
+  };
+  engineMatches: boolean;
+  filesChecked: number;
+  differences: SpokeDiffItem[];
+  summary: string;
+  checkedAt: string;
+}
+
+export type TabId =
+  | 'overview'
+  | 'runner'
+  | 'agents'
+  | 'commands'
+  | 'handoff'
+  | 'specs'
+  | 'spoke'
+  | 'security';
 
 export type HandoffMode = 'spec' | 'diff' | 'arch' | 'overview';
 
@@ -81,4 +165,3 @@ export interface ParsedSlice {
   targetFiles: string;
   raw: string;
 }
-

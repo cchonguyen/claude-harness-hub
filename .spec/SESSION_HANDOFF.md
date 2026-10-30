@@ -1,7 +1,5 @@
-# SESSION HANDOFF
-- **Last Active Platform:** Google AI Studio
-- **Active Branch / State:** `aistudio/fix-dashboard-hardening` — Hardened `server.ts` (`execFile` allow-list for handoff mode, `127.0.0.1` default host binding), updated Runner input placeholder, removed unused Gemini capability from `metadata.json`, and split `src/App.tsx` into `src/api.ts` + `src/tabs/*.tsx`.
-- **Files Modified in Last Turn:** `server.ts`, `metadata.json`, `src/types.ts`, `src/api.ts`, `src/App.tsx`, `src/tabs/OverviewTab.tsx`, `src/tabs/RunnerTab.tsx`, `src/tabs/AgentsTab.tsx`, `src/tabs/CommandsTab.tsx`, `src/tabs/HandoffTab.tsx`, `src/tabs/SpecsTab.tsx`, `src/tabs/SpokeTab.tsx`, `src/tabs/SecurityTab.tsx`, `.spec/SESSION_HANDOFF.md`
-- **Verification Status:** `npm run typecheck` (`tsc --noEmit`) passed with 0 errors; `npm run lint --silent` passed; `npm run build` (`vite build`) passed; `node --test .harness/hooks/lib/runner-matcher.test.mjs` passed (3/3); `pr-scope-check.mjs` unverified in container (no `.git` directory).
-- **Immediate Next Step:** Pull `aistudio/fix-dashboard-hardening`, run `node .harness/scripts/pr-scope-check.mjs origin/main HEAD` and `/review-pr`, open the PR into `main`, and merge it.
-- **Active Slice:** none (Vibe Mode)
+# SESSION HANDOFF (Updated by Google AI Studio)
+- **Active Branch / State:** `aistudio/dashboard-operator-guidance` — Updated Slash Commands tab (`src/tabs/CommandsTab.tsx`) to open command details and execution instructions in a sticky right-hand column alongside the scrollable command list from `sm:` width upward, building on the operator guidance, handoff metadata/staleness, spec diff/ownership, spoke dry-run, and persistent runner updates.
+- **Files Modified by AI Studio:** `README.md`, `server.ts`, `src/types.ts`, `src/api.ts`, `src/App.tsx`, `src/tabs/OverviewTab.tsx`, `src/tabs/CommandsTab.tsx`, `src/tabs/HandoffTab.tsx`, `src/tabs/SpecsTab.tsx`, `src/tabs/SpokeTab.tsx`, `src/tabs/RunnerTab.tsx`, `.spec/SESSION_HANDOFF.md`
+- **Verification Status:** Verified `npm run typecheck --silent` (0 errors), `node --test .harness/hooks/lib/runner-matcher.test.mjs` (3/3 passed), `npm run lint --silent` (0 errors), and `vite build` in AI Studio preview; Claude Code should run `node .harness/scripts/pr-scope-check.mjs origin/main HEAD` after pulling.
+- **Immediate Next Step for Claude:** Pull the branch, run `node .harness/scripts/pr-scope-check.mjs origin/main HEAD` and `/review-pr`, and merge to `main` or begin Slice 2.

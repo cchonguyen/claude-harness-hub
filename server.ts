@@ -22,9 +22,21 @@ const readSafe = (relPath: string): string => {
   return fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : '';
 };
 
+const getMtimeIso = (relPath: string): string | null => {
+  const p = path.join(root, relPath);
+  if (!fs.existsSync(p)) return null;
+  try {
+    return fs.statSync(p).mtime.toISOString();
+  } catch {
+    return null;
+  }
+};
+
 // Runner matching regexes (exact mirror of .harness/hooks/lib/runner-matcher.mjs)
-const RUNNER = /\b(vitest|jest|tsc|eslint|typecheck|pytest|mypy|pyright)\b|\bruff\s+(check|format\s+--check)\b|\bnode\s+--test\b|\b(npm|pnpm|yarn|bun)\s+(run\s+)?(test|build|lint|typecheck)\b/i;
-const EXECUTES = /\b(vitest|jest|pytest)\b|\bnode\s+--test\b|\b(npm|pnpm|yarn|bun)\s+(run\s+)?(test|build)\b/i;
+const RUNNER =
+  /\b(vitest|jest|tsc|eslint|typecheck|pytest|mypy|pyright)\b|\bruff\s+(check|format\s+--check)\b|\bnode\s+--test\b|\b(npm|pnpm|yarn|bun)\s+(run\s+)?(test|build|lint|typecheck)\b/i;
+const EXECUTES =
+  /\b(vitest|jest|pytest)\b|\bnode\s+--test\b|\b(npm|pnpm|yarn|bun)\s+(run\s+)?(test|build)\b/i;
 const INSTALL = /\b(pip3?|uv\s+pip|uv|npm|pnpm|yarn|bun)\s+(install|add|i|sync)\b/i;
 
 const isTestOrBuild = (cmd: string): boolean => RUNNER.test(cmd) && !INSTALL.test(cmd);
@@ -44,6 +56,130 @@ const getMode = () => {
 
   return { mode, activeCount, activeLines };
 };
+
+// Parse .spec/SESSION_HANDOFF.md into structured fields
+const parseSessionHandoff = () => {
+  const raw = readSafe('.spec/SESSION_HANDOFF.md');
+  const updatedAt = getMtimeIso('.spec/SESSION_HANDOFF.md');
+
+  const extractField = (labels: string[], fallback: string): string => {
+    for (const label of labels) {
+      const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const re = new RegExp(`^\\s*-\\s*\\*\\*${escaped}:?\\*\\*:?\\s*(.+)$`, 'im');
+      const match = raw.match(re);
+      if (match && match[1]) {
+        return match[1].trim();
+      }
+    }
+    return fallback;
+  };
+
+  let lastPlatform = extractField(['Last Active Platform'], '');
+  if (!lastPlatform) {
+    if (/Updated by Google AI Studio/i.test(raw)) {
+      lastPlatform = 'Google AI Studio';
+    } else if (/Claude Code/i.test(raw)) {
+      lastPlatform = 'Claude Code';
+    } else {
+      lastPlatform = 'Unknown';
+    }
+  }
+
+  const activeBranchState = extractField(['Active Branch / State', 'Branch / State'], 'Not recorded');
+  const filesModified = extractField(
+    ['Files Modified in Last Turn', 'Files Modified by AI Studio', 'Files Modified'],
+    'None listed'
+  );
+  const verificationStatus = extractField(['Verification Status'], 'Unverified');
+  const immediateNextStep = extractField(
+    ['Immediate Next Step', 'Immediate Next Step for Claude'],
+    'Review .spec/PROGRESS.md for the next slice'
+  );
+  const activeSlice = extractField(['Active Slice'], 'none (Vibe Mode)');
+
+  return {
+    lastPlatform,
+    activeBranchState,
+    filesModified,
+    verificationStatus,
+    immediateNextStep,
+    activeSlice,
+    updatedAt
+  };
+};
+
+// Parse included files from HANDOFF_PACKET.md content
+const parsePacketMetadata = (content: string) => {
+  if (!content) {
+    return { mode: 'spec' as const, includedFiles: [] as string[] };
+  }
+  const isDiff = content.includes('# GIT DIFF') || content.startsWith('@code-reviewer');
+  const included: string[] = [];
+
+  if (isDiff) {
+    included.push('.spec/SYSTEM_SPEC.md', '.spec/PROGRESS.md');
+    const diffMatches = content.matchAll(/^\+\+\+\s+b\/(.+)$/gm);
+    for (const m of diffMatches) {
+      const file = m[1].trim();
+      if (file && !included.includes(file)) {
+        included.push(file);
+      }
+    }
+  } else {
+    included.push('.spec/OVERVIEW.md', '.spec/SYSTEM_SPEC.md', '.spec/PROGRESS.md');
+    const refMatches = content.matchAll(/^## Reference:\s+(.+)$/gm);
+    for (const m of refMatches) {
+      const file = m[1].trim();
+      if (file && !included.includes(file)) {
+        included.push(file);
+      }
+    }
+  }
+
+  return {
+    mode: isDiff ? ('diff' as const) : ('spec' as const),
+    includedFiles: included
+  };
+};
+
+const getHandoffStateSnapshot = (lastReceipt: string | null = null, requestedMode?: string) => {
+  const packetRel = '.spec/HANDOFF_PACKET.md';
+  const packetAbs = path.join(root, packetRel);
+  const exists = fs.existsSync(packetAbs);
+  const packetContent = exists ? fs.readFileSync(packetAbs, 'utf8') : '';
+  const packetMtime = getMtimeIso(packetRel);
+  const progressMtime = getMtimeIso('.spec/PROGRESS.md');
+  const { mode: detectedMode, includedFiles } = parsePacketMetadata(packetContent);
+
+  let isStale = false;
+  let staleReason: string | null = null;
+  if (exists && packetMtime && progressMtime) {
+    const packetTime = new Date(packetMtime).getTime();
+    const progressTime = new Date(progressMtime).getTime();
+    // Allow 500ms filesystem jitter when bundle-handoff just read PROGRESS.md
+    if (progressTime > packetTime + 500) {
+      isStale = true;
+      staleReason = `.spec/PROGRESS.md was modified after this packet was built (${new Date(
+        progressMtime
+      ).toLocaleTimeString()} > ${new Date(packetMtime).toLocaleTimeString()}). Rebuild before copying.`;
+    }
+  }
+
+  return {
+    exists,
+    mode: (requestedMode || detectedMode) as 'spec' | 'diff' | 'arch' | 'overview',
+    receipt: lastReceipt,
+    packetContent,
+    lineCount: packetContent ? packetContent.split('\n').length : 0,
+    includedFiles,
+    packetMtime,
+    progressMtime,
+    isStale,
+    staleReason
+  };
+};
+
+let lastHandoffReceipt: string | null = null;
 
 // 1. Status API
 app.get('/api/status', (req, res) => {
@@ -67,6 +203,8 @@ app.get('/api/status', (req, res) => {
     } catch {}
 
     const hasSliceCheckpoint = fs.existsSync(path.join(root, '.spec', '.slice-checkpoint'));
+    const progressMtime = getMtimeIso('.spec/PROGRESS.md');
+    const sessionHandoff = parseSessionHandoff();
 
     res.json({
       version,
@@ -77,24 +215,63 @@ app.get('/api/status', (req, res) => {
       hasSliceCheckpoint,
       checkpoints,
       strikes,
-      root
+      root,
+      progressMtime,
+      sessionHandoff
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// 2. Spec Files API
-const SPEC_FILE_PATHS = [
-  '.spec/PROGRESS.md',
-  '.spec/OVERVIEW.md',
-  '.spec/SYSTEM_SPEC.md',
-  '.spec/DECISIONS.md',
-  '.spec/SESSION_HANDOFF.md',
-  '.spec/AI_STUDIO_RULES.md',
-  'CLAUDE.md',
-  '.claude/harness-rules.md'
-];
+// 2. Spec Files API with Ownership Metadata
+const SPEC_FILE_META: Record<
+  string,
+  { ownership: 'editable' | 'template' | 'harness-owned'; ownershipLabel: string; readOnly: boolean }
+> = {
+  '.spec/PROGRESS.md': {
+    ownership: 'editable',
+    ownershipLabel: 'Editable (Project-Owned)',
+    readOnly: false
+  },
+  '.spec/OVERVIEW.md': {
+    ownership: 'editable',
+    ownershipLabel: 'Editable (Project-Owned)',
+    readOnly: false
+  },
+  '.spec/SYSTEM_SPEC.md': {
+    ownership: 'editable',
+    ownershipLabel: 'Editable (Project-Owned)',
+    readOnly: false
+  },
+  '.spec/DECISIONS.md': {
+    ownership: 'editable',
+    ownershipLabel: 'Editable (Project-Owned)',
+    readOnly: false
+  },
+  '.spec/SESSION_HANDOFF.md': {
+    ownership: 'editable',
+    ownershipLabel: 'Editable (Project-Owned)',
+    readOnly: false
+  },
+  'CLAUDE.md': {
+    ownership: 'editable',
+    ownershipLabel: 'Editable (Project-Owned)',
+    readOnly: false
+  },
+  '.spec/AI_STUDIO_RULES.md': {
+    ownership: 'template',
+    ownershipLabel: 'Editable (Spoke Template — preserved on sync)',
+    readOnly: false
+  },
+  '.claude/harness-rules.md': {
+    ownership: 'harness-owned',
+    ownershipLabel: 'Harness-Owned (Read-Only Engine File — synced via /learn)',
+    readOnly: true
+  }
+};
+
+const SPEC_FILE_PATHS = Object.keys(SPEC_FILE_META);
 
 app.get('/api/spec-files', (req, res) => {
   try {
@@ -102,17 +279,19 @@ app.get('/api/spec-files', (req, res) => {
       const abs = path.join(root, rel);
       const exists = fs.existsSync(abs);
       let content = '';
-      let mtime = null;
+      let mtime: string | null = null;
       let size = 0;
       let lineCount = 0;
 
       if (exists) {
         content = fs.readFileSync(abs, 'utf8');
         const stats = fs.statSync(abs);
-        mtime = stats.mtime;
+        mtime = stats.mtime.toISOString();
         size = stats.size;
         lineCount = content.split('\n').length;
       }
+
+      const meta = SPEC_FILE_META[rel];
 
       return {
         path: rel,
@@ -120,7 +299,10 @@ app.get('/api/spec-files', (req, res) => {
         content,
         mtime,
         size,
-        lineCount
+        lineCount,
+        ownership: meta.ownership,
+        ownershipLabel: meta.ownershipLabel,
+        readOnly: meta.readOnly
       };
     });
 
@@ -133,8 +315,16 @@ app.get('/api/spec-files', (req, res) => {
 app.put('/api/spec-file', (req, res) => {
   try {
     const { filePath, content } = req.body;
-    if (!SPEC_FILE_PATHS.includes(filePath)) {
-      return res.status(403).json({ error: 'Modification restricted to registered spec & contract files' });
+    const meta = SPEC_FILE_META[filePath];
+    if (!meta) {
+      return res
+        .status(403)
+        .json({ error: 'Modification restricted to registered spec & contract files' });
+    }
+    if (meta.readOnly) {
+      return res
+        .status(403)
+        .json({ error: `${filePath} is harness-owned and protected from direct edits.` });
     }
 
     const abs = path.join(root, filePath);
@@ -152,13 +342,12 @@ app.post('/api/progress/slice-action', (req, res) => {
   try {
     const { action, sliceIndex, newSlice } = req.body;
     const progressPath = path.join(root, '.spec', 'PROGRESS.md');
-    let content = fs.existsSync(progressPath) ? fs.readFileSync(progressPath, 'utf8') : '';
+    const content = fs.existsSync(progressPath) ? fs.readFileSync(progressPath, 'utf8') : '';
     let lines = content.split('\n');
 
     const sliceRegex = /^(\s*-\s*\[)([ xX])(\]\s*\*\*Slice\s+([^:*]+)\*\*.*)$/;
 
     if (action === 'activate') {
-      // Deactivate any currently active slice first (Single-Slice Lock)
       lines = lines.map((line) => {
         if (line.includes('[IN_PROGRESS]')) {
           return line.replace(/\s*\[IN_PROGRESS\]/, '');
@@ -166,15 +355,12 @@ app.post('/api/progress/slice-action', (req, res) => {
         return line;
       });
 
-      // Activate the targeted slice
       let currentSliceIdx = 0;
       lines = lines.map((line) => {
         if (sliceRegex.test(line)) {
           if (currentSliceIdx === sliceIndex) {
-            // Ensure unchecked and append [IN_PROGRESS]
             line = line.replace(/^(\s*-\s*\[)[ xX](\])/, '$1 $2');
             if (!line.includes('[IN_PROGRESS]')) {
-              // Place [IN_PROGRESS] after task title/tag or before Target files
               if (line.includes('— Target files:')) {
                 line = line.replace('— Target files:', '[IN_PROGRESS] — Target files:');
               } else {
@@ -211,10 +397,8 @@ app.post('/api/progress/slice-action', (req, res) => {
         return line;
       });
     } else if (action === 'clear-all') {
-      // Clear all IN_PROGRESS to return to Vibe Mode
       lines = lines.map((line) => line.replace(/\s*\[IN_PROGRESS\]/, ''));
     } else if (action === 'add') {
-      // Add new slice line
       const tag = newSlice.isCore ? '[CORE / DATA]' : '[UI / VISUAL]';
       const newLine = `- [ ] **Slice ${newSlice.number}** \`${tag}\`: ${newSlice.description} — Target files: ${newSlice.targetFiles}`;
       lines.push(newLine);
@@ -240,7 +424,7 @@ app.get('/api/agents', (req, res) => {
     const agents = files.map((file) => {
       const raw = fs.readFileSync(path.join(agentsDir, file), 'utf8');
       const frontmatterMatch = raw.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
-      let metadata: Record<string, string> = {};
+      const metadata: Record<string, string> = {};
       let body = raw;
 
       if (frontmatterMatch) {
@@ -281,7 +465,7 @@ app.get('/api/commands', (req, res) => {
     const commands = files.map((file) => {
       const raw = fs.readFileSync(path.join(commandsDir, file), 'utf8');
       const frontmatterMatch = raw.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
-      let metadata: Record<string, any> = {};
+      const metadata: Record<string, any> = {};
       let body = raw;
 
       if (frontmatterMatch) {
@@ -342,9 +526,11 @@ app.post('/api/runner/classify', (req, res) => {
         reason = 'Does not match test, build, lint, or typecheck patterns';
       }
     } else if (executes) {
-      reason = 'Executes code (test or build) — advances the Vibe Mode "last known green" checkpoint';
+      reason =
+        'Executes code (test or build) — advances the Vibe Mode "last known green" checkpoint';
     } else {
-      reason = 'Static analysis only (lint or typecheck) — counts as a run for circuit breaker, but NEVER advances green checkpoint';
+      reason =
+        'Static analysis only (lint or typecheck) — counts as a run for circuit breaker, but NEVER advances green checkpoint';
     }
 
     res.json({
@@ -358,49 +544,264 @@ app.post('/api/runner/classify', (req, res) => {
   }
 });
 
-// 8. Test Runner API
+// 8. Allow-Listed Command & Test Runner API with Persistence
+const ALLOWED_RUNNER_COMMANDS: Record<
+  'unit-tests' | 'typecheck' | 'lint',
+  { bin: string; args: string[]; label: string }
+> = {
+  'unit-tests': {
+    bin: 'node',
+    args: ['--test', '.harness/hooks/lib/runner-matcher.test.mjs'],
+    label: 'node --test .harness/hooks/lib/runner-matcher.test.mjs'
+  },
+  typecheck: {
+    bin: 'npm',
+    args: ['run', 'typecheck', '--silent'],
+    label: 'npm run typecheck --silent'
+  },
+  lint: {
+    bin: 'npm',
+    args: ['run', 'lint', '--silent'],
+    label: 'npm run lint --silent'
+  }
+};
+
+let lastTestRunRecord: {
+  commandId: 'unit-tests' | 'typecheck' | 'lint';
+  commandLabel: string;
+  success: boolean;
+  stdout: string;
+  stderr?: string;
+  durationMs: number;
+  ranAt: string;
+} | null = null;
+
+app.get('/api/tests/last', (req, res) => {
+  res.json({ lastRun: lastTestRunRecord });
+});
+
 app.post('/api/tests/run', async (req, res) => {
-  const start = Date.now();
-  try {
-    const { stdout, stderr } = await execFileAsync('node', ['--test', '.harness/hooks/lib/runner-matcher.test.mjs'], { cwd: root });
-    const durationMs = Date.now() - start;
-    res.json({
-      success: true,
-      stdout: stdout || stderr,
-      durationMs
+  const requestedId = req.body?.commandId || 'unit-tests';
+  if (!(requestedId in ALLOWED_RUNNER_COMMANDS)) {
+    return res.status(400).json({
+      error: 'Command not in allow-list. Allowed: unit-tests, typecheck, lint'
     });
+  }
+  const cmdId = requestedId as 'unit-tests' | 'typecheck' | 'lint';
+  const spec = ALLOWED_RUNNER_COMMANDS[cmdId];
+  const start = Date.now();
+  const ranAt = new Date().toISOString();
+
+  try {
+    const { stdout, stderr } = await execFileAsync(spec.bin, spec.args, { cwd: root });
+    const durationMs = Date.now() - start;
+    const output = (stdout || stderr || 'Passed (0 errors, silent output)').trim();
+    lastTestRunRecord = {
+      commandId: cmdId,
+      commandLabel: spec.label,
+      success: true,
+      stdout: output,
+      durationMs,
+      ranAt
+    };
+    res.json(lastTestRunRecord);
   } catch (error: any) {
     const durationMs = Date.now() - start;
-    res.json({
+    lastTestRunRecord = {
+      commandId: cmdId,
+      commandLabel: spec.label,
       success: false,
       stdout: error.stdout || '',
       stderr: error.stderr || error.message,
-      durationMs
-    });
+      durationMs,
+      ranAt
+    };
+    res.json(lastTestRunRecord);
   }
 });
 
-// 9. Bundle Handoff Generator API
+// 9. Bundle Handoff Generator & State API
 const ALLOWED_HANDOFF_MODES = new Set(['spec', 'diff', 'arch', 'overview']);
+
+app.get('/api/handoff-state', (req, res) => {
+  try {
+    res.json(getHandoffStateSnapshot(lastHandoffReceipt));
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
 app.post('/api/bundle-handoff', async (req, res) => {
   try {
     const mode = typeof req.body?.mode === 'string' ? req.body.mode.toLowerCase() : 'spec';
     if (!ALLOWED_HANDOFF_MODES.has(mode)) {
-      return res.status(400).json({ error: 'Invalid mode. Allowed values: spec, diff, arch, overview' });
+      return res
+        .status(400)
+        .json({ error: 'Invalid mode. Allowed values: spec, diff, arch, overview' });
     }
     const scriptPath = path.join(root, '.harness', 'scripts', 'bundle-handoff.mjs');
     const { stdout, stderr } = await execFileAsync('node', [scriptPath, mode], { cwd: root });
-    const packetContent = readSafe('.spec/HANDOFF_PACKET.md');
+    lastHandoffReceipt = stdout.trim() || stderr.trim();
+    const state = getHandoffStateSnapshot(lastHandoffReceipt, mode);
 
     res.json({
       success: true,
-      receipt: stdout.trim() || stderr.trim(),
-      packetContent,
-      lineCount: packetContent.split('\n').length
+      ...state
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message, stderr: error.stderr });
+  }
+});
+
+// 10. Spoke Connection & Engine File Match / Dry-Run API
+const walkFilesRelative = (baseDir: string, relTarget: string): string[] => {
+  const fullTarget = path.join(baseDir, relTarget);
+  if (!fs.existsSync(fullTarget)) return [];
+  const stat = fs.statSync(fullTarget);
+  if (stat.isFile()) return [relTarget];
+
+  const results: string[] = [];
+  const walk = (currentAbs: string) => {
+    const entries = fs.readdirSync(currentAbs, { withFileTypes: true });
+    for (const entry of entries) {
+      const nextAbs = path.join(currentAbs, entry.name);
+      if (entry.isDirectory()) {
+        walk(nextAbs);
+      } else if (entry.isFile()) {
+        results.push(path.relative(baseDir, nextAbs).split(path.sep).join('/'));
+      }
+    }
+  };
+  walk(fullTarget);
+  return results;
+};
+
+app.get('/api/spoke-status', (req, res) => {
+  try {
+    let hubConfig = { repo: 'claude-harness-hub', owner: 'cchonguyen', branch: 'main' };
+    try {
+      hubConfig = { ...hubConfig, ...JSON.parse(readSafe('.harness/hub.json') || '{}') };
+    } catch {}
+
+    const ENGINE_PATHS = ['.claude', '.harness', '.harness-version'];
+    const TEMPLATE_PATHS = ['.spec/AI_STUDIO_RULES.md'];
+
+    // Look for a sibling hub checkout first (mirrors hub-sync.mjs findSibling)
+    const candidates = [process.env.HARNESS_HUB_DIR, path.join(root, '..', hubConfig.repo)].filter(
+      Boolean
+    ) as string[];
+    const parent = path.dirname(root);
+    try {
+      for (const d of fs.readdirSync(parent, { withFileTypes: true })) {
+        if (d.isDirectory()) candidates.push(path.join(parent, d.name));
+      }
+    } catch {}
+
+    const siblingHub = candidates
+      .map((c) => path.resolve(c))
+      .find(
+        (c) =>
+          c !== path.resolve(root) &&
+          fs.existsSync(path.join(c, '.harness')) &&
+          path.basename(c) === hubConfig.repo
+      );
+
+    // Check if current repo is the hub repo itself
+    let pkgName = '';
+    try {
+      pkgName = JSON.parse(readSafe('package.json') || '{}').name || '';
+    } catch {}
+    const isHubRepo =
+      !siblingHub &&
+      (path.basename(root) === hubConfig.repo || pkgName === hubConfig.repo) &&
+      fs.existsSync(path.join(root, '.harness', 'scripts', 'hub-sync.mjs'));
+
+    const compareSourceDir = siblingHub || (isHubRepo ? root : null);
+    const hubAttached = Boolean(siblingHub || isHubRepo);
+    const attachMethod = siblingHub
+      ? 'sibling'
+      : isHubRepo
+      ? 'self-hub'
+      : 'unattached';
+
+    const differences: Array<{
+      path: string;
+      status:
+        | 'identical'
+        | 'modified'
+        | 'missing-in-spoke'
+        | 'extra-in-spoke'
+        | 'template-preserved'
+        | 'template-missing';
+    }> = [];
+
+    if (compareSourceDir) {
+      const hubFiles = new Set<string>();
+      const localFiles = new Set<string>();
+
+      for (const rel of ENGINE_PATHS) {
+        walkFilesRelative(compareSourceDir, rel).forEach((f) => hubFiles.add(f));
+        walkFilesRelative(root, rel).forEach((f) => localFiles.add(f));
+      }
+
+      const allEngineFiles = Array.from(new Set([...hubFiles, ...localFiles])).sort();
+      for (const relFile of allEngineFiles) {
+        const inHub = hubFiles.has(relFile);
+        const inLocal = localFiles.has(relFile);
+        if (inHub && !inLocal) {
+          differences.push({ path: relFile, status: 'missing-in-spoke' });
+        } else if (!inHub && inLocal) {
+          differences.push({ path: relFile, status: 'extra-in-spoke' });
+        } else {
+          const hubBuf = fs.readFileSync(path.join(compareSourceDir, relFile));
+          const localBuf = fs.readFileSync(path.join(root, relFile));
+          if (hubBuf.equals(localBuf)) {
+            differences.push({ path: relFile, status: 'identical' });
+          } else {
+            differences.push({ path: relFile, status: 'modified' });
+          }
+        }
+      }
+
+      for (const tpl of TEMPLATE_PATHS) {
+        const localExists = fs.existsSync(path.join(root, tpl));
+        differences.push({
+          path: tpl,
+          status: localExists ? 'template-preserved' : 'template-missing'
+        });
+      }
+    }
+
+    const driftCount = differences.filter(
+      (d) =>
+        d.status === 'modified' ||
+        d.status === 'missing-in-spoke' ||
+        d.status === 'template-missing'
+    ).length;
+
+    const engineMatches = hubAttached && driftCount === 0;
+    const summary = !hubAttached
+      ? `HUB_NOT_ATTACHED: No checkout of ${hubConfig.owner}/${hubConfig.repo} found at ../${hubConfig.repo} or HARNESS_HUB_DIR.`
+      : isHubRepo
+      ? `This workspace is the authoritative ${hubConfig.repo} hub (${differences.length} engine & template files verified intact).`
+      : engineMatches
+      ? `Spoke engine files match attached hub at ${siblingHub} (${differences.length} files verified).`
+      : `Dry-run detected ${driftCount} file(s) that will be updated or added on sync from ${siblingHub}.`;
+
+    res.json({
+      isHubRepo,
+      hubAttached,
+      attachMethod,
+      hubPath: compareSourceDir,
+      hubConfig,
+      engineMatches,
+      filesChecked: differences.length,
+      differences,
+      summary,
+      checkedAt: new Date().toISOString()
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
   }
 });
 
@@ -429,4 +830,3 @@ async function startServer() {
 }
 
 startServer();
-

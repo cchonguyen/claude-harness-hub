@@ -5,6 +5,10 @@ import {
   CommandDoc,
   RunnerClassification,
   HandoffMode,
+  HandoffState,
+  SpokeStatus,
+  TestRunRecord,
+  AllowListedCommandId,
   SliceActionType,
   NewSliceInput
 } from './types';
@@ -66,7 +70,9 @@ export async function getCommands(): Promise<CommandDoc[]> {
   return data.commands || [];
 }
 
-export async function classifyRunnerCommand(command: string): Promise<RunnerClassification | null> {
+export async function classifyRunnerCommand(
+  command: string
+): Promise<RunnerClassification | null> {
   const res = await fetch('/api/runner/classify', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -76,20 +82,42 @@ export async function classifyRunnerCommand(command: string): Promise<RunnerClas
   return res.json();
 }
 
-export async function runHarnessTests(): Promise<{ stdout?: string; stderr?: string }> {
-  const res = await fetch('/api/tests/run', { method: 'POST' });
+export async function getLastTestRun(): Promise<TestRunRecord | null> {
+  const res = await fetch('/api/tests/last');
+  if (!res.ok) return null;
+  const data = await res.json();
+  return data.lastRun || null;
+}
+
+export async function runHarnessTests(
+  commandId: AllowListedCommandId = 'unit-tests'
+): Promise<TestRunRecord> {
+  const res = await fetch('/api/tests/run', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ commandId })
+  });
   return res.json();
 }
 
-export async function generateBundleHandoff(mode: HandoffMode): Promise<{
-  receipt: string;
-  packetContent: string;
-} | null> {
+export async function getHandoffState(): Promise<HandoffState | null> {
+  const res = await fetch('/api/handoff-state');
+  if (!res.ok) return null;
+  return res.json();
+}
+
+export async function generateBundleHandoff(mode: HandoffMode): Promise<HandoffState | null> {
   const res = await fetch('/api/bundle-handoff', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ mode })
   });
+  if (!res.ok) return null;
+  return res.json();
+}
+
+export async function getSpokeStatus(): Promise<SpokeStatus | null> {
+  const res = await fetch('/api/spoke-status');
   if (!res.ok) return null;
   return res.json();
 }
