@@ -15,6 +15,9 @@
 - **Vibe Mode (no `[IN_PROGRESS]` slice, or no `.spec/PROGRESS.md`):** Edit the requested files directly. Do NOT require `/triage` or `/spec` first. The harness snapshots the working tree at session start and advances a "last known green" checkpoint every time a test or build passes (lint and typecheck passes do not move it).
 - **Slice Mode (exactly 1 `[IN_PROGRESS]` slice):** Strict single-task lock. Edit only `.spec/` files and the slice's declared `Target files:`. A slice-start checkpoint (`.spec/.slice-checkpoint`) is saved automatically when the line is marked `[IN_PROGRESS]`.
 - **2+ `[IN_PROGRESS]` slices:** Edits are blocked. Keep only 1 active slice (or clear them all for Vibe Mode).
+- **Manager Mode (`.spec/harness.json` says `"workMode": "manager"`):** With no `[IN_PROGRESS]` slice, source edits are blocked (PLAN LOCK). Plan with `/triage` or `/spec`, or make a one-file change with `/quick-fix`. Harness files, `.spec/harness.json`, and the harness block in `AGENTS.md` are locked in every mode.
+- **Pending rule candidates:** Lines under `## Pending Rule Candidates — not in force` in `.claude/project-rules.md` are not rules. Do not follow them until the operator promotes one with `/learn promote`.
+- **Main-red stop:** While origin has the tag `harness-main-red`, do not start a slice or a quick fix. Fixing main is the only work.
 
 ## Execution & Guardrail Rules
 - **Verification in Vibe Mode:** Run the project's quick check from `CLAUDE.md` (`Project-Specific Commands`) **once per turn, after the final edit**, with quiet flags (`pytest -q --tb=short`, `ruff check --quiet`, `vitest run --reporter=dot`). Do not re-run it after every single file edit.
