@@ -8,9 +8,11 @@ import { pathToFileURL } from 'node:url';
 
 const ACTIVE_TASK = /^\s*-\s*\[.\].*\[IN_PROGRESS\]/;
 const SLICE_TYPE = /\[(UI \/ VISUAL|CORE \/ DATA)\]/;
+const DONE_SLICE = /^\s*-\s*\[x\]\s*\*\*Slice\b/i;
 const TEST_FILE = /(\.test\.|\.spec\.)[^/]*$|(^|\/)test_[^/]*\.py$|_test\.(py|go)$/;
 const ASSERTION = /expect\(|assert|should|toBe|toEqual|raises|t\.Error|t\.Fatal/;
-const SKIP_MARK = /\.skip\(|\.only\(|\bxit\(|\bxdescribe\(|@pytest\.mark\.skip|t\.Skip\(|t\.skip\(/;
+// Anchored to the start of a line, so the text inside a string or fixture does not count
+const SKIP_MARK = /^\s*(?:it|test|describe)\.(?:skip|only)\(|^\s*(?:xit|xdescribe)\(|^\s*@pytest\.mark\.skip|^\s*t\.(?:Skip|skip)\(/;
 const MANIFEST = /(^|\/)(package\.json|package-lock\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lockb?|requirements[^/]*\.txt|pyproject\.toml|uv\.lock|go\.(mod|sum)|Cargo\.(toml|lock))$/;
 // Spoke-owned engine-adjacent files that a spoke may change even though they sit in an engine folder
 const SPOKE_OWNED = new Set(['.claude/project-rules.md', '.claude/settings.spoke.json']);
@@ -71,7 +73,9 @@ export function analyze({ changed, deleted = [], diff = new Map(), progress = ''
   const notes = [];
   let tripwireFired = false;
 
-  if (changed.length === 0) problems.push('The diff is empty. There is nothing to review.');
+  // A deletion-only PR still changed files, so count deletions as touched
+  const touched = [...new Set([...changed, ...deleted])];
+  if (touched.length === 0) problems.push('The diff is empty. There is nothing to review.');
 
   for (const file of changed) {
     for (const t of TRIPWIRES) {
@@ -80,29 +84,40 @@ export function analyze({ changed, deleted = [], diff = new Map(), progress = ''
   }
   for (const file of deleted) { problems.push(`Red tripwire (file deleted): ${file}`); tripwireFired = true; }
 
-  for (const file of changed) {
+  for (const file of touched) {
     if (!isEngineFile(file)) continue;
     if (strict) problems.push(`Spoke changed an engine file, which the hub owns: ${file}`);
     else notes.push(`Engine file changed: ${file}. Confirm this is intended.`);
   }
 
-  // Scope rule: while exactly one slice is [IN_PROGRESS], only its Target files (and .spec/) may change
+  // Scope rule: while exactly one slice is [IN_PROGRESS], only its Target files (and .spec/) may change.
+  // A slice PR usually marks its slice [x] by the time it opens, so fall back to slice lines this PR marks done.
   const active = progress.split('\n').filter((l) => ACTIVE_TASK.test(l));
-  let sliceType = null;
+  const doneInPr = (diff.get('.spec/PROGRESS.md')?.added ?? []).filter((l) => DONE_SLICE.test(l));
+  let sliceLines = [];
   if (active.length > 1) {
     problems.push(`${active.length} slices are [IN_PROGRESS]. The harness allows only one.`);
   } else if (active.length === 1) {
-    sliceType = active[0].match(SLICE_TYPE)?.[1] ?? null;
-    const targets = (active[0].match(/Target files:\s*(.+)$/i)?.[1] || '')
-      .replace(/[`*]/g, '').split(',').map((s) => s.trim().replace(/^\.\//, '')).filter(Boolean);
+    sliceLines = active;
+  } else if (doneInPr.length > 0) {
+    sliceLines = doneInPr;
+    notes.push(`No slice is [IN_PROGRESS]. Checking the ${doneInPr.length} slice(s) this PR marks done.`);
+  }
+
+  let sliceType = null;
+  if (sliceLines.length > 0) {
+    sliceType = sliceLines.some((l) => l.match(SLICE_TYPE)?.[1] === 'CORE / DATA') ? 'CORE / DATA'
+      : sliceLines.map((l) => l.match(SLICE_TYPE)?.[1]).find(Boolean) ?? null;
+    const targets = sliceLines.flatMap((l) => (l.match(/Target files:\s*(.+)$/i)?.[1] || '')
+      .replace(/[`*]/g, '').split(',').map((s) => s.trim().replace(/^\.\//, '')).filter(Boolean));
     // Same rule as the guard hook: exact file, or a file inside a listed folder
     const isAllowed = (file, allowed) =>
       file === allowed || file.startsWith(allowed.endsWith('/') ? allowed : `${allowed}/`);
-    for (const file of changed) {
+    for (const file of touched) {
       if (file.startsWith('.spec/') || file === 'CLAUDE.md' || targets.some((t) => isAllowed(file, t))) continue;
-      problems.push(`Outside the active slice's Target files: ${file}`);
+      problems.push(`Outside the slice's Target files: ${file}`);
     }
-  } else {
+  } else if (active.length === 0) {
     notes.push('Vibe Mode: no slice is in progress, so the Target files rule does not apply.');
   }
 

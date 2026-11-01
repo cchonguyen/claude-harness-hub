@@ -17,6 +17,12 @@ export const AGENTS_MARKERS = ['<!-- >>> harness >>> -->', '<!-- <<< harness <<<
 // Spoke-owned files that the hub may create once, but never overwrites afterwards
 export const TEMPLATE_ONLY = ['.spec/AI_STUDIO_RULES.md'];
 
+// CI workflow templates ship in the hub; a spoke gets its own copy once, in .github/workflows
+export const WORKFLOW_TEMPLATE_DIR = '.harness/templates/workflows/';
+export const SPOKE_WORKFLOW_DIR = '.github/workflows/';
+export const workflowDestination = (rel) =>
+  rel.startsWith(WORKFLOW_TEMPLATE_DIR) && rel.endsWith('.yml') ? SPOKE_WORKFLOW_DIR + path.basename(rel) : null;
+
 const SPOKE_OWNED = [/^CLAUDE\.md$/, /^\.claude\/project-rules\.md$/, /^\.claude\/settings\.spoke\.json$/, /^\.spec\//];
 
 export const sha256 = (buf) => crypto.createHash('sha256').update(buf).digest('hex');

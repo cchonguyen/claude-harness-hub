@@ -91,6 +91,20 @@ test('an added skip or only in a test file is flagged', () => {
   assert.ok(r.problems.some((p) => p.includes('skipped or focused')));
 });
 
+test('a skip inside a string is not a skipped test, a real skip line is', () => {
+  const inString = analyze({
+    changed: ['src/foo.test.js'],
+    diff: testDiff('src/foo.test.js', ["  const fixture = \"it.skip('x')\";", '  expect(1).toBe(1);']),
+  });
+  assert.deepEqual(inString.problems, []);
+
+  const real = analyze({
+    changed: ['src/foo.test.js'],
+    diff: testDiff('src/foo.test.js', ["  it.skip('later', () => {});", '  expect(1).toBe(1);']),
+  });
+  assert.ok(real.problems.some((p) => p.includes('skipped or focused')));
+});
+
 test('each Red tripwire fires and marks the slice Red', () => {
   const files = [
     'package.json', 'requirements.txt', 'db/migrations/001.sql', 'src/schema.ts',
@@ -129,6 +143,30 @@ test('two IN_PROGRESS slices is a problem', () => {
   const progress = ACTIVE('CORE / DATA', 'src/') + ACTIVE('UI / VISUAL', 'src/');
   const r = analyze({ changed: ['src/a.test.js'], diff: testDiff('src/a.test.js', ['expect(1).toBe(1);']), progress });
   assert.ok(r.problems.some((p) => p.includes('2 slices are [IN_PROGRESS]')));
+});
+
+test('a slice PR that marks its slice [x] still gets the scope and test checks', () => {
+  // The PR diff adds the done line; the head PROGRESS has no [IN_PROGRESS] line
+  const doneLine = '- [x] **Slice 9** `[YELLOW][CORE / DATA]`: thing — Target files: `src/foo.js`, `src/foo.test.js`';
+  const diff = new Map([['.spec/PROGRESS.md', { added: [doneLine], removed: [] }]]);
+  const outside = analyze({ changed: ['.spec/PROGRESS.md', 'src/bar.js'], diff, progress: doneLine });
+  assert.equal(outside.sliceType, 'CORE / DATA');
+  assert.ok(outside.problems.some((p) => p.includes("Outside the slice's Target files: src/bar.js")));
+  assert.ok(outside.problems.some((p) => p.includes('needs a test file change')));
+
+  const inside = analyze({
+    changed: ['.spec/PROGRESS.md', 'src/foo.js', 'src/foo.test.js'],
+    diff: new Map([...diff, ['src/foo.test.js', { added: ['expect(1).toBe(1);'], removed: [] }]]),
+    progress: doneLine,
+  });
+  assert.deepEqual(inside.problems, []);
+});
+
+test('a deletion-only PR is not "empty" and deleted engine files are still caught', () => {
+  const r = analyze({ changed: [], deleted: ['.harness/hooks/old.mjs'], progress: '', strict: true });
+  assert.ok(!r.problems.some((p) => p.includes('diff is empty')));
+  assert.ok(r.problems.some((p) => p.includes('engine file')));
+  assert.ok(r.problems.some((p) => p.includes('(file deleted): .harness/hooks/old.mjs')));
 });
 
 test('strict CLI exits 1 on a deletion, advisory CLI exits 0 for the same diff', () => {
