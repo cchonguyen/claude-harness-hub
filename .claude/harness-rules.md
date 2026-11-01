@@ -34,6 +34,16 @@
   - **Cloud Settings Click (preferred):** something the operator fixes in the Claude web UI, e.g. attaching a second repo to the session, allowing a network host, adding an environment secret.
   - **True Terminal Fallback (last resort):** only when the Cloud container physically cannot do it (another account's credentials, interactive OAuth, local hardware). Give one self-contained copy-paste command.
 
+## External Co-Development (Google Antigravity & AI Studio)
+- **Contract:** External relief implementors follow `.spec/EXTERNAL_AGENT_RULES.md`. `.spec/AI_STUDIO_RULES.md` is an alias that points to it.
+- **Handoff format:** Every platform overwrites `.spec/SESSION_HANDOFF.md` with the same five fields, including `Last Active Platform`.
+- **Ingest on return:** When `.spec/SESSION_HANDOFF.md` names an external `Last Active Platform`, treat that work as untrusted until you verify it:
+  1. Run `git fetch origin <branch>` on the branch named in `Active Branch / State`.
+  2. Review the diff against `main` and the files listed in `Files Modified in Last Turn`. Stay inside the `[IN_PROGRESS]` slice's `Target files:`.
+  3. Run the quick checks from `CLAUDE.md` once, then record the results in `.spec/SESSION_HANDOFF.md`.
+  4. Merge only through the PR. Claude never merges an external branch without a green check.
+- **Engine files:** External agents never edit `.claude/`, `.harness/`, or `.harness-version`. Those change only in this hub repo.
+
 ## Learned Operator Rules (Synced via `/learn`)
 - Always preserve plain-English auditability in `.spec/OVERVIEW.md` at major feature milestones.
 - When giving the operator steps to run in Terminal, always use labelled, one-per-stage fenced code blocks with full absolute paths and the expected result after each block. Every command must be complete and paste-ready: never a partial snippet, never "run the same as before", and never a path the operator has not confirmed. Before writing Terminal steps, confirm the project folder with a directory listing.

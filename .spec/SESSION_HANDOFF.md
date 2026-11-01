@@ -1,5 +1,10 @@
-# SESSION HANDOFF (Updated by Google AI Studio)
-- **Active Branch / State:** `aistudio/dashboard-operator-guidance` — Updated Slash Commands tab (`src/tabs/CommandsTab.tsx`) to open command details and execution instructions in a sticky right-hand column alongside the scrollable command list from `sm:` width upward, building on the operator guidance, handoff metadata/staleness, spec diff/ownership, spoke dry-run, and persistent runner updates.
-- **Files Modified by AI Studio:** `README.md`, `server.ts`, `src/types.ts`, `src/api.ts`, `src/App.tsx`, `src/tabs/OverviewTab.tsx`, `src/tabs/CommandsTab.tsx`, `src/tabs/HandoffTab.tsx`, `src/tabs/SpecsTab.tsx`, `src/tabs/SpokeTab.tsx`, `src/tabs/RunnerTab.tsx`, `.spec/SESSION_HANDOFF.md`
-- **Verification Status:** Verified `npm run typecheck --silent` (0 errors), `node --test .harness/hooks/lib/runner-matcher.test.mjs` (3/3 passed), `npm run lint --silent` (0 errors), and `vite build` in AI Studio preview; Claude Code should run `node .harness/scripts/pr-scope-check.mjs origin/main HEAD` after pulling.
-- **Immediate Next Step for Claude:** Pull the branch, run `node .harness/scripts/pr-scope-check.mjs origin/main HEAD` and `/review-pr`, and merge to `main` or begin Slice 2.
+# SESSION HANDOFF
+
+Shared template for Claude Code, Google Antigravity, and Google AI Studio. Every platform overwrites this file with the same five fields, in this order, before it pushes.
+
+- **Last Active Platform:** Claude Code Web
+- **Active Branch / State:** `claude/project-thread-chwsln`. Adds the unified external co-development protocol: `.spec/EXTERNAL_AGENT_RULES.md` as canonical contract, `.spec/AI_STUDIO_RULES.md` as alias, ingest-on-return steps in `.claude/harness-rules.md`, and the shared handoff template in `.claude/commands/checkpoint-handoff.md`. PR into `main` open for review.
+- **Files Modified in Last Turn:** `.spec/EXTERNAL_AGENT_RULES.md`, `.spec/AI_STUDIO_RULES.md`, `.spec/SESSION_HANDOFF.md`, `.spec/OVERVIEW.md`, `.spec/DECISIONS.md`, `.claude/harness-rules.md`, `.claude/commands/checkpoint-handoff.md`, `.harness/scripts/hub-sync.mjs`, `server.ts`
+- **Verification Status:** See the PR body for the exact checks and their results.
+- **Immediate Next Step for Claude:** Review and merge the PR into `main`, then run `/implement` or `/triage` for the next idea. No slice is active (Vibe Mode).
+- **Active Slice:** none (Vibe Mode)

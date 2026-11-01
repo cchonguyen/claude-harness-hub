@@ -259,9 +259,14 @@ const SPEC_FILE_META: Record<
     ownershipLabel: 'Editable (Project-Owned)',
     readOnly: false
   },
-  '.spec/AI_STUDIO_RULES.md': {
+  '.spec/EXTERNAL_AGENT_RULES.md': {
     ownership: 'template',
     ownershipLabel: 'Editable (Spoke Template — preserved on sync)',
+    readOnly: false
+  },
+  '.spec/AI_STUDIO_RULES.md': {
+    ownership: 'template',
+    ownershipLabel: 'Editable (Spoke Template Alias — preserved on sync)',
     readOnly: false
   },
   '.claude/harness-rules.md': {
@@ -684,7 +689,7 @@ app.get('/api/spoke-status', (req, res) => {
     } catch {}
 
     const ENGINE_PATHS = ['.claude', '.harness', '.harness-version'];
-    const TEMPLATE_PATHS = ['.spec/AI_STUDIO_RULES.md'];
+    const TEMPLATE_PATHS = ['.spec/EXTERNAL_AGENT_RULES.md', '.spec/AI_STUDIO_RULES.md'];
 
     // Look for a sibling hub checkout first (mirrors hub-sync.mjs findSibling)
     const candidates = [process.env.HARNESS_HUB_DIR, path.join(root, '..', hubConfig.repo)].filter(
