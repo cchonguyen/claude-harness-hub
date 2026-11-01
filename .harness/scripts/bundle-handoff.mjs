@@ -81,6 +81,7 @@ const specPayload = () => {
 let payload = '';
 let refCount = 0;
 let note = '';
+let lockNote = '';
 if (mode === 'diff') {
   // Diff against HEAD through a throwaway copy of the index, so intent-to-add never touches the real one
   let diff = '';
@@ -88,23 +89,28 @@ if (mode === 'diff') {
   const tmpIndex = path.join(os.tmpdir(), `harness-bundle-index-${process.pid}`);
   const run = (cmd, env = {}) => execSync(cmd, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 10 * 1024 * 1024, env: { ...process.env, ...env } });
   // The packet itself and secret files never enter the diff, even when a repo forgot to ignore them
-  const scope = "-- . ':(exclude).spec/HANDOFF_PACKET.md' ':(exclude).spec/DEBUG_PACKET.md' ':(exclude,glob)**/.env*' ':(exclude,glob)**/.dev.vars*'";
+  // Lockfiles are machine output: left out of the diff, and named in a one-line note instead
+  const LOCKFILES = ['package-lock.json', 'pnpm-lock.yaml', 'yarn.lock', 'bun.lockb', 'bun.lock', 'uv.lock', 'poetry.lock', 'Pipfile.lock', 'Cargo.lock', 'go.sum', 'Gemfile.lock', 'composer.lock'];
+  const lockPaths = LOCKFILES.map((f) => `':(glob)**/${f}'`).join(' ');
+  const scope = `-- . ':(exclude).spec/HANDOFF_PACKET.md' ':(exclude).spec/DEBUG_PACKET.md' ':(exclude,glob)**/.env*' ':(exclude,glob)**/.dev.vars*' ${LOCKFILES.map((f) => `':(exclude,glob)**/${f}'`).join(' ')}`;
   try {
     const realIndex = path.resolve(root, run('git rev-parse --git-path index').trim());
     if (fs.existsSync(realIndex)) fs.copyFileSync(realIndex, tmpIndex);
     run(`git add -N ${scope}`, { GIT_INDEX_FILE: tmpIndex });
     diff = run(`git diff HEAD ${scope}`, { GIT_INDEX_FILE: tmpIndex });
+    const locks = run(`git diff --name-only HEAD -- ${lockPaths}`, { GIT_INDEX_FILE: tmpIndex }).split('\n').filter(Boolean);
+    if (locks.length) lockNote = `_Lockfile changed, so the diff leaves it out: ${locks.join(', ')}_\n\n`;
   } catch {
     diffFailed = true;
     diff = '_Unable to compute git diff (not a git repo, or no commits yet)_';
   } finally {
     fs.rmSync(tmpIndex, { force: true });
   }
-  if (!diffFailed && diff.trim() === '') {
+  if (!diffFailed && diff.trim() === '' && !lockNote) {
     mode = 'spec';
     note = ' No uncommitted changes, so it holds the spec bundle instead of an empty diff.';
   } else {
-    payload = `@code-reviewer Please audit this implementation diff against our System Spec and active task slice. Identify bugs, security flaws, scope breaches, or regressions.\n\n# SYSTEM SPEC\n${spec}\n\n# ACTIVE PROGRESS\n${progress}\n\n# GIT DIFF\n\`\`\`diff\n${diff}\n\`\`\``;
+    payload = `@code-reviewer Please audit this implementation diff against our System Spec and active task slice. Identify bugs, security flaws, scope breaches, or regressions.\n\n# SYSTEM SPEC\n${spec}\n\n# ACTIVE PROGRESS\n${progress}\n\n# GIT DIFF\n${lockNote}\`\`\`diff\n${diff}\n\`\`\``;
   }
 }
 if (mode === 'spec') ({ out: payload, refCount } = specPayload());
