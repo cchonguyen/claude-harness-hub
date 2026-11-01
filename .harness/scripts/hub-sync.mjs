@@ -10,7 +10,7 @@ import { execFileSync } from 'node:child_process';
 import {
   AGENTS_MARKERS, GITIGNORE_MARKERS, PROJECT_RULES, SETTINGS_SPOKE, TEMPLATE_ONLY,
   appendActiveRules, learnedRulesToKeep, listHubOwned, mergeBlock, mergeSettings,
-  readManifest, sha256, spokeOnlyPermissions, writeManifest,
+  harvestSpokePermissions, readManifest, sha256, writeManifest,
 } from './lib/sync-core.mjs';
 
 // execFileSync passes arguments without a shell, so quotes, $ and backticks in a rule are inert
@@ -43,8 +43,9 @@ if (action === 'push' && fs.existsSync(stagingFile)) {
 
 const isGitCheckout = (dir) => { try { return gitIn(dir, 'rev-parse', '--show-toplevel') === fs.realpathSync(dir); } catch { return false; } };
 const originUrl = (dir) => { try { return gitIn(dir, 'remote', 'get-url', 'origin'); } catch { return ''; } };
+// Hub detection uses the origin URL only: a folder name can be changed, and an agent can change hub.json
 const isHubCheckout = (dir) =>
-  isGitCheckout(dir) && (path.basename(dir) === hub.repo || new RegExp(`[/:]${hub.repo}(\\.git)?$`).test(originUrl(dir)));
+  isGitCheckout(dir) && new RegExp(`[/:]${hub.repo}(\\.git)?$`).test(originUrl(dir));
 
 // Running inside the hub repo itself: commit engine files on the current branch
 if (action !== 'init' && isHubCheckout(root)) {
@@ -82,27 +83,36 @@ const notAttached = () => {
   ].join('\n'));
 };
 
-// Merge the spoke's settings: hub hooks win, permissions are unioned, hub deny beats spoke allow.
-function syncSettings(hubRoot, extrasFile) {
+// Merge the spoke's settings. settings.spoke.json is the source of truth for spoke permissions; settings.json is
+// generated from it. Hub hooks win, and hub deny beats any allow.
+function syncSettings(hubRoot, extrasFile, previousGenerated) {
   const hubSettings = readJson(path.join(hubRoot, '.claude', 'settings.json'));
-  if (!hubSettings) return 'hub settings missing';
+  if (!hubSettings) return { note: 'hub settings missing', generated: previousGenerated };
   const spokeFile = path.join(root, '.claude', 'settings.json');
   const spokeSettings = readJson(spokeFile) || {};
-  // Keep any spoke-only permissions in their own file, so a later pull cannot erase them
-  const extras = readJson(extrasFile) || {};
-  const found = spokeOnlyPermissions(spokeSettings, hubSettings);
-  const merged = {
-    allow: [...new Set([...(extras.permissions?.allow || []), ...found.allow])],
-    deny: [...new Set([...(extras.permissions?.deny || []), ...found.deny])],
+  const stored = readJson(extrasFile) || {};
+  const storedPerm = { allow: stored.permissions?.allow || [], deny: stored.permissions?.deny || [] };
+
+  // Hand-added permissions move into the spoke file; generated ones are never re-harvested
+  const harvested = harvestSpokePermissions(spokeSettings, hubSettings, previousGenerated);
+  const extras = {
+    allow: [...new Set([...storedPerm.allow, ...harvested.allow])],
+    deny: [...new Set([...storedPerm.deny, ...harvested.deny])],
   };
-  if (merged.allow.length || merged.deny.length) {
+  if (extras.allow.length || extras.deny.length) {
     fs.mkdirSync(path.dirname(extrasFile), { recursive: true });
-    fs.writeFileSync(extrasFile, JSON.stringify({ permissions: merged }, null, 2) + '\n', 'utf8');
+    fs.writeFileSync(extrasFile, JSON.stringify({ permissions: extras }, null, 2) + '\n', 'utf8');
   }
-  const next = mergeSettings(hubSettings, spokeSettings, merged);
+
+  // Drop the old generated permissions from the base so removals in settings.spoke.json stick
+  const next = mergeSettings(hubSettings, { ...spokeSettings, permissions: {} }, extras);
   fs.mkdirSync(path.dirname(spokeFile), { recursive: true });
   fs.writeFileSync(spokeFile, JSON.stringify(next, null, 2) + '\n', 'utf8');
-  return `${merged.allow.length + merged.deny.length} spoke-only permission(s) kept`;
+  const count = harvested.allow.length + harvested.deny.length;
+  return {
+    note: `${count} hand-added permission(s) moved to settings.spoke.json`,
+    generated: next.permissions,
+  };
 }
 
 // Pull every hub-owned file. Returns a receipt object; never throws on a single file conflict.
@@ -114,6 +124,7 @@ function pullFromHub(hubRoot) {
   const hubSet = new Set(hubFiles);
   const files = {};
   const receipt = { written: [], conflicts: [], deleted: [], backedUp: [], notes: [] };
+  let settingsGenerated = manifest?.settingsGenerated ?? null;
   const backupDir = path.join(root, '.harness-backup', new Date().toISOString().replace(/[:.]/g, '-'));
 
   // First sync on a spoke with no manifest: keep spoke learned rules, back up anything that differs
@@ -178,7 +189,9 @@ function pullFromHub(hubRoot) {
   const hubAgents = readText(path.join(hubRoot, '.harness', 'templates', 'AGENTS.block.md'));
   const agentsPath = path.join(root, 'AGENTS.md');
   fs.writeFileSync(agentsPath, mergeBlock(readText(agentsPath), hubAgents, AGENTS_MARKERS), 'utf8');
-  receipt.notes.push(syncSettings(hubRoot, path.join(root, SETTINGS_SPOKE)));
+  const settingsResult = syncSettings(hubRoot, path.join(root, SETTINGS_SPOKE), manifest?.settingsGenerated ?? null);
+  receipt.notes.push(settingsResult.note);
+  settingsGenerated = settingsResult.generated;
 
   // Templates the spoke may customise: copied once, never overwritten
   for (const rel of TEMPLATE_ONLY) {
@@ -192,7 +205,7 @@ function pullFromHub(hubRoot) {
   }
 
   // Keep the old hash for conflicted files so they stay conflicted until resolved
-  writeManifest(root, files, readText(path.join(root, '.harness-version'), '').trim() || 'unknown');
+  writeManifest(root, files, readText(path.join(root, '.harness-version'), '').trim() || 'unknown', settingsGenerated);
   return { receipt, migrating };
 }
 

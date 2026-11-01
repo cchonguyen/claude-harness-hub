@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {
   AGENTS_MARKERS, GITIGNORE_MARKERS, appendActiveRules, isSpokeOwned, learnedRulesToKeep,
-  listHubOwned, mergeBlock, mergeSettings, spokeOnlyPermissions,
+  harvestSpokePermissions, listHubOwned, mergeBlock, mergeSettings, spokeOnlyPermissions,
 } from './sync-core.mjs';
 
 test('mergeBlock appends a block when markers are absent', () => {
@@ -85,4 +85,11 @@ test('learnedRulesToKeep reads rules under a second copy of the header', () => {
   const spoke = '## Learned Operator Rules\n- hub line\n\n## Learned Operator Rules\n- appended here\n';
   const hub = '## Learned Operator Rules\n- hub line\n';
   assert.deepEqual(learnedRulesToKeep(spoke, hub), ['- appended here']);
+});
+
+test('harvestSpokePermissions takes hand-added entries but not generated or hub ones', () => {
+  const hub = { permissions: { allow: ['hub-a'], deny: [] } };
+  const previous = { allow: ['gen-b'], deny: [] };
+  const spoke = { permissions: { allow: ['hub-a', 'gen-b', 'hand-c'], deny: [] } };
+  assert.deepEqual(harvestSpokePermissions(spoke, hub, previous), { allow: ['hand-c'], deny: [] });
 });

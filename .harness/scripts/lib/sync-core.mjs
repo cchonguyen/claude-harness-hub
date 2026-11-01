@@ -54,11 +54,27 @@ export function readManifest(root) {
   }
 }
 
-export function writeManifest(root, files, version) {
+// settingsGenerated: the permission lists last written into .claude/settings.json, so the next pull can tell
+// a permission the spoke added by hand from one the harness generated.
+export function writeManifest(root, files, version, settingsGenerated) {
   const abs = path.join(root, MANAGED_FILE);
   fs.mkdirSync(path.dirname(abs), { recursive: true });
   const sorted = Object.fromEntries(Object.entries(files).sort(([a], [b]) => a.localeCompare(b)));
-  fs.writeFileSync(abs, JSON.stringify({ version, files: sorted }, null, 2) + '\n', 'utf8');
+  const data = { version, files: sorted, settingsGenerated: settingsGenerated || null };
+  fs.writeFileSync(abs, JSON.stringify(data, null, 2) + '\n', 'utf8');
+}
+
+// Permissions the spoke added by hand since the last pull: in settings.json, but neither in the hub
+// nor in what the harness generated last time. Entries the spoke removed from settings.spoke.json stay removed.
+export function harvestSpokePermissions(spokeSettings, hubSettings, previousGenerated) {
+  const hubPerm = hubSettings.permissions || {};
+  const prev = previousGenerated || { allow: [], deny: [] };
+  const spokePerm = spokeSettings.permissions || {};
+  const pick = (key) => {
+    const skip = new Set([...(hubPerm[key] || []), ...(prev[key] || [])]);
+    return (spokePerm[key] || []).filter((entry) => !skip.has(entry));
+  };
+  return { allow: pick('allow'), deny: pick('deny') };
 }
 
 // Replace the text between two markers, or append a fresh block if the markers are absent.
