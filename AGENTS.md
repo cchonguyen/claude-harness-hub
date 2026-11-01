@@ -11,7 +11,8 @@ Before modifying files or generating plans:
 - If a task in `.spec/PROGRESS.md` is marked `[IN_PROGRESS]`, modify ONLY its designated `Target files:`.
 - NEVER modify or delete files inside `.claude/`, `.harness/`, or `.harness-version`.
 - Do NOT introduce unrequested npm or Python dependencies.
-- Verify all code changes using the project's quiet test suite (`pytest -q` or `vitest run --reporter=dot`).
+- Verify code changes with this repo's checks from `CLAUDE.md`, run once after the final edit: `npm run typecheck --silent`, `npm run lint --silent`, and `node --test .harness/hooks/lib/runner-matcher.test.mjs`.
+- The full external co-development contract is `.spec/EXTERNAL_AGENT_RULES.md`. This file summarizes it and does not replace it.
 
 ## 3. Mandatory Baton Pass (Before Handoff)
 Before concluding work:
@@ -20,5 +21,5 @@ Before concluding work:
   - **Last Active Platform:** Google Antigravity
   - **Active Branch / State:** [Branch name & brief status]
   - **Files Modified in Last Turn:** [List of changed file paths]
-  - **Verification Status:** [e.g., "Verified: pytest passed (0 errors)"]
+  - **Verification Status:** [e.g., "Verified: typecheck, lint, and node --test passed"]
   - **Immediate Next Step for Claude:** [1-sentence directive]
