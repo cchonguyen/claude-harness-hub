@@ -10,7 +10,7 @@ import { execFileSync } from 'node:child_process';
 import {
   AGENTS_MARKERS, GITIGNORE_MARKERS, PROJECT_RULES, SETTINGS_SPOKE, TEMPLATE_ONLY,
   appendActiveRules, learnedRulesToKeep, listHubOwned, mergeBlock, mergeSettings,
-  harvestSpokePermissions, readManifest, sha256, writeManifest,
+  harvestSpokePermissions, readManifest, sha256, workflowDestination, writeManifest,
 } from './lib/sync-core.mjs';
 
 // execFileSync passes arguments without a shell, so quotes, $ and backticks in a rule are inert
@@ -202,6 +202,15 @@ function pullFromHub(hubRoot) {
       fs.copyFileSync(src, dest);
       receipt.written.push(`${rel} (template, first copy)`);
     }
+  }
+
+  // CI workflow templates: copied to .github/workflows once when missing, then the spoke owns them
+  for (const rel of hubFiles) {
+    const dest = workflowDestination(rel);
+    if (!dest || fs.existsSync(path.join(root, dest))) continue;
+    fs.mkdirSync(path.join(root, path.dirname(dest)), { recursive: true });
+    fs.copyFileSync(path.join(hubRoot, rel), path.join(root, dest));
+    receipt.written.push(`${dest} (CI template, first copy)`);
   }
 
   // Keep the old hash for conflicted files so they stay conflicted until resolved

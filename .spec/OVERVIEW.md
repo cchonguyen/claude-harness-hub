@@ -13,5 +13,6 @@
 - **In Progress:** None
 - **Designed, not built:** Harness v3.0 "Manager Mode". New projects require a planned task before code changes (a one-step `/quick-fix` covers small tweaks), Claude can run up to 3 low-risk tasks in a row, risky changes always stop for you, and an automatic check flags broken pull requests and a broken main branch. Full contract in `.spec/SYSTEM_SPEC.md` section 4.
 - **Built, tested on scratch copies:** Slice 3.0 (smoke check, `cchonguyen/charliechonguyen.com#7`) and Slice 3.1 (hub-sync now respects file ownership: hub-owned files refresh, spoke files are never touched, settings and blocks merge, and a first sync backs up anything it replaces).
-- **Not confirmed:** whether the live hooks wrote the slice checkpoint in this hub session. A scratch copy does write it, so the live hook did not run for that edit, and that is still open.
-- **Up Next:** Slice 3.2 (CI gate for spokes)
+- **Built, tests pass, live CI not yet run:** Slice 3.2 (CI gate). `pr-scope-check.mjs` now has Red tripwires, the test-assertion rule, and a `--strict` mode that spokes use to block a PR. Spoke workflow templates are in `.harness/templates/workflows/`. Hub-sync does not copy them into spokes yet.
+- **Not confirmed:** whether the live hooks wrote the slice checkpoint in this hub session. A scratch copy does write it, so the live hook did not run for that edit, and that is still open. It happened again for Slice 3.2.
+- **Up Next:** Slice 3.3 (guard switch for spokes)

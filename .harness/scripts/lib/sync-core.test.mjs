@@ -6,6 +6,7 @@ import path from 'node:path';
 import {
   AGENTS_MARKERS, GITIGNORE_MARKERS, appendActiveRules, isSpokeOwned, learnedRulesToKeep,
   harvestSpokePermissions, listHubOwned, mergeBlock, mergeSettings, spokeOnlyPermissions,
+  workflowDestination,
 } from './sync-core.mjs';
 
 test('mergeBlock appends a block when markers are absent', () => {
@@ -85,6 +86,12 @@ test('learnedRulesToKeep reads rules under a second copy of the header', () => {
   const spoke = '## Learned Operator Rules\n- hub line\n\n## Learned Operator Rules\n- appended here\n';
   const hub = '## Learned Operator Rules\n- hub line\n';
   assert.deepEqual(learnedRulesToKeep(spoke, hub), ['- appended here']);
+});
+
+test('workflowDestination maps hub workflow templates to the spoke CI folder', () => {
+  assert.equal(workflowDestination('.harness/templates/workflows/harness-pr-check.yml'), '.github/workflows/harness-pr-check.yml');
+  assert.equal(workflowDestination('.harness/templates/spoke/CLAUDE.md'), null);
+  assert.equal(workflowDestination('.harness/templates/workflows/notes.md'), null);
 });
 
 test('harvestSpokePermissions takes hand-added entries but not generated or hub ones', () => {
