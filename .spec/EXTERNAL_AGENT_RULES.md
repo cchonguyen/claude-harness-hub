@@ -11,6 +11,9 @@ Before modifying any files:
 ## 2. BOUNDED EXECUTION CONTRACT
 - If a task in `.spec/PROGRESS.md` is `[IN_PROGRESS]`, modify ONLY its designated `Target files:`.
 - Never modify engine files in `.claude/`, `.harness/`, or `.harness-version`.
+- Do not start a new slice while origin has the tag `harness-main-red` (`git ls-remote --tags origin harness-main-red` prints a line). Fixing main is the only work until it is gone.
+- Read the `Branch Owner` line in `.spec/SESSION_HANDOFF.md`. Push only to a branch you own. If the owner is Claude, open `antigravity/<slice>` or comment on the PR instead.
+- Never push or merge to `main`. Never merge a PR with a red or missing check.
 - Do not introduce unsolicited dependencies or modify database schemas without explicit instruction.
 - If running in an environment with bash/terminal access (e.g., Google Antigravity), run the quick checks from `CLAUDE.md` once after your final edit: `npm run typecheck --silent`, `npm run lint --silent`, and `node --test .harness/hooks/lib/runner-matcher.test.mjs`.
 - If a fix needs a file outside scope, do not edit it. Write the file path and the reason into `.spec/SESSION_HANDOFF.md` under "Immediate Next Step for Claude" and stop.
