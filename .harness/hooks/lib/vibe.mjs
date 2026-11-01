@@ -20,10 +20,21 @@ export const activeLines = (root) => {
   if (!fs.existsSync(p)) return [];
   return fs.readFileSync(p, 'utf8').split('\n').filter((l) => ACTIVE_TASK.test(l));
 };
-// 0 active -> 'vibe', 1 -> 'slice', 2+ -> 'conflict'
+// Spoke-owned work mode from .spec/harness.json. A missing or unreadable file keeps 'vibe' (v2.2 behavior).
+export const workModeOf = (root) => {
+  try {
+    const data = JSON.parse(fs.readFileSync(path.join(root, '.spec', 'harness.json'), 'utf8'));
+    return data.workMode === 'manager' ? 'manager' : 'vibe';
+  } catch {
+    return 'vibe';
+  }
+};
+
+// 0 active + vibe -> 'vibe'; 0 active + manager -> 'locked' (plan first); 1 -> 'slice'; 2+ -> 'conflict'
 export const modeOf = (root) => {
   const n = activeLines(root).length;
-  return n === 0 ? 'vibe' : n === 1 ? 'slice' : 'conflict';
+  if (n === 0) return workModeOf(root) === 'manager' ? 'locked' : 'vibe';
+  return n === 1 ? 'slice' : 'conflict';
 };
 
 const checkpointPath = (root) => path.join(root, '.spec', '.vibe-checkpoint.json');

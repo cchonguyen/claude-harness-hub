@@ -4,15 +4,29 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { modeOf, readCheckpoints, ensureBaseline, diffSince } from './lib/vibe.mjs';
+import {
+  agentsBlock, colourOf, isEngineLocked, isEnginePath, isHubOrigin, nextContent,
+} from './lib/guard-rules.mjs';
 
 const gitIn = (cwd, args, env = {}) =>
   execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'], env: { ...process.env, ...env } }).trim();
 const gitRoot = () => { try { return gitIn(process.cwd(), ['rev-parse', '--show-toplevel']); } catch { return ''; } };
 
 // Claude's Bash shell has no CLAUDE_PROJECT_DIR, so `--restore` falls back to the git top level
-const root = process.env.CLAUDE_PROJECT_DIR || gitRoot() || process.cwd();
-const progressPath = path.join(root, '.spec', 'PROGRESS.md');
-const checkpointFile = path.join(root, '.spec', '.slice-checkpoint');
+let root = process.env.CLAUDE_PROJECT_DIR || gitRoot() || process.cwd();
+let progressPath = path.join(root, '.spec', 'PROGRESS.md');
+let checkpointFile = path.join(root, '.spec', '.slice-checkpoint');
+// The git repo that owns a file, found from the file's own folder (not from the session's first repo)
+function repoRootOf(absFile) {
+  let dir = path.dirname(absFile);
+  while (!fs.existsSync(dir) && path.dirname(dir) !== dir) dir = path.dirname(dir);
+  try { return gitIn(dir, ['rev-parse', '--show-toplevel']); } catch { return ''; }
+}
+function useRepo(dir) {
+  root = dir;
+  progressPath = path.join(dir, '.spec', 'PROGRESS.md');
+  checkpointFile = path.join(dir, '.spec', '.slice-checkpoint');
+}
 const CHECKPOINT_REF = 'refs/harness/slice-checkpoint';
 const ACTIVE_TASK = /^\s*-\s*\[.\].*\[IN_PROGRESS\]/;
 const git = (args, env) => gitIn(root, args, env);
@@ -115,10 +129,14 @@ try { event = JSON.parse(fs.readFileSync(0, 'utf8')); } catch { process.exit(0);
 const targetFile = event.tool_input?.file_path || event.tool_input?.notebook_path || '';
 if (!targetFile) process.exit(0);
 
+// A file is governed by the git repo it lives in, so a session with two attached repos checks each one's rules
+const fileRepo = repoRootOf(path.resolve(root, targetFile));
+if (fileRepo) useRepo(fileRepo);
+
 const absTarget = path.resolve(root, targetFile);
 const relTarget = path.relative(root, absTarget).replace(/\\/g, '/');
 
-// 0. Files outside the project (e.g. ~/.claude memory) are not governed by the slice lock
+// 0. Files outside any project (e.g. ~/.claude memory) are not governed by the slice lock
 if (relTarget.startsWith('../') || path.isAbsolute(relTarget)) process.exit(0);
 
 // Vibe Mode (0 active slices): edits are free, but make sure a baseline exists before the first change
@@ -127,17 +145,8 @@ if (modeOf(root) === 'vibe') ensureBaseline(root, event.session_id || 'default')
 // 1. If editing .spec/PROGRESS.md itself, verify incoming text doesn't mark >1 task line as [IN_PROGRESS]
 if (relTarget === '.spec/PROGRESS.md') {
   const currentContent = fs.existsSync(progressPath) ? fs.readFileSync(progressPath, 'utf8') : '';
-  let nextContent = currentContent;
-  const input = event.tool_input || {};
-  if (event.tool_name === 'Write') {
-    nextContent = input.content || '';
-  } else if (event.tool_name === 'Edit' && typeof input.old_string === 'string' && typeof input.new_string === 'string') {
-    // split/join avoids String.replace treating "$&" etc. in new_string as patterns
-    nextContent = input.replace_all
-      ? currentContent.split(input.old_string).join(input.new_string)
-      : currentContent.replace(input.old_string, () => input.new_string);
-  }
-  const activeTaskLines = nextContent.split('\n').filter((line) => ACTIVE_TASK.test(line));
+  const incoming = nextContent(currentContent, event.tool_name, event.tool_input || {});
+  const activeTaskLines = incoming.split('\n').filter((line) => ACTIVE_TASK.test(line));
 
   if (activeTaskLines.length > 1) {
     console.error('WORK LOCK VIOLATION: Cannot mark more than 1 task line as [IN_PROGRESS] in .spec/PROGRESS.md.');
@@ -147,24 +156,50 @@ if (relTarget === '.spec/PROGRESS.md') {
   // Slices are identified by "**Slice N**", so rewording the active line mid-slice keeps its checkpoint
   const sliceId = (line) => line?.match(/\*\*Slice\s+([^*]+)\*\*/)?.[1].trim() ?? line?.trim();
   const previousActive = currentContent.split('\n').find((line) => ACTIVE_TASK.test(line));
+  // Frozen colour (4.C.1): the colour tag of a slice is set at /spec and cannot change while the slice is active
+  const nowActive = activeTaskLines[0];
+  if (activeTaskLines.length === 1 && previousActive && sliceId(nowActive) === sliceId(previousActive)
+    && colourOf(nowActive) !== colourOf(previousActive)) {
+    console.error(`COLOUR LOCK: The colour tag on the active slice is frozen at /spec. Keep ${colourOf(previousActive) || 'its current tag'}; only the architect changes it.`);
+    process.exit(2);
+  }
   if (activeTaskLines.length === 1 && sliceId(activeTaskLines[0]) !== sliceId(previousActive)) {
     captureCheckpoint();
   }
   process.exit(0);
 }
 
-// 2. Always permit edits to .spec/ or CLAUDE.md. Engine files (.claude/, .harness/, .harness-version) are
-// editable in the hub repo itself; in a spoke, sync owns them, so a slice must list them in Target files:
-const isEnginePath = relTarget.startsWith('.claude/') || relTarget.startsWith('.harness/') || relTarget === '.harness-version';
-const isHubRepo = (() => {
-  let repo = 'claude-harness-hub';
-  try { repo = JSON.parse(fs.readFileSync(path.join(root, '.harness', 'hub.json'), 'utf8')).repo || repo; } catch {}
-  let origin = '';
-  try { origin = git(['remote', 'get-url', 'origin']); } catch {}
-  return path.basename(root) === repo || new RegExp(`[/:]${repo}(\\.git)?$`).test(origin);
-})();
-if (relTarget.startsWith('.spec/') || relTarget === 'CLAUDE.md' || (isEnginePath && (modeOf(root) === 'vibe' || (isHubRepo && modeOf(root) === 'slice')))) {
+// 2. Engine lock (SYSTEM_SPEC 4.A.3). In a spoke the hub owns these files in every mode. The hub itself is the source,
+// so it is not locked. Hub detection uses the origin URL only: a folder name or hub.json can be changed by an agent.
+let origin = '';
+try { origin = git(['remote', 'get-url', 'origin']); } catch {}
+const isHubRepo = isHubOrigin(origin);
+if (!isHubRepo && isEngineLocked(relTarget)) {
+  console.error(`ENGINE LOCK: ${relTarget} is owned by the harness hub. Change it in claude-harness-hub, then run node .harness/scripts/hub-sync.mjs pull.`);
+  process.exit(2);
+}
+// The harness block in AGENTS.md is hub-owned. The rest of AGENTS.md is the spoke's.
+if (!isHubRepo && relTarget === 'AGENTS.md') {
+  const current = fs.existsSync(absTarget) ? fs.readFileSync(absTarget, 'utf8') : '';
+  const next = nextContent(current, event.tool_name, event.tool_input || {});
+  if (agentsBlock(current) !== agentsBlock(next)) {
+    console.error('ENGINE LOCK: The harness block in AGENTS.md is hub-owned. Edit the text outside the markers, or change the block in claude-harness-hub.');
+    process.exit(2);
+  }
+}
+
+// Always permitted: spec files, CLAUDE.md, and the spoke's own rules file
+if (relTarget.startsWith('.spec/') || relTarget === 'CLAUDE.md' || relTarget === '.claude/project-rules.md') {
   process.exit(0);
+}
+if (isHubRepo && isEnginePath(relTarget) && ['vibe', 'slice'].includes(modeOf(root))) {
+  process.exit(0);
+}
+
+// Manager Mode (4.A.1): no active slice means no source edits until a task is planned
+if (modeOf(root) === 'locked') {
+  console.error('PLAN LOCK: No task is marked [IN_PROGRESS] in .spec/PROGRESS.md. Run /triage or /spec first.');
+  process.exit(2);
 }
 
 // 3. For source code edits, enforce that at most 1 task is [IN_PROGRESS] and check declared target files if specified

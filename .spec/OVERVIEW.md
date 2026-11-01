@@ -15,4 +15,5 @@
 - **Built, tested on scratch copies:** Slice 3.0 (smoke check, `cchonguyen/charliechonguyen.com#7`) and Slice 3.1 (hub-sync now respects file ownership: hub-owned files refresh, spoke files are never touched, settings and blocks merge, and a first sync backs up anything it replaces).
 - **Built, tests pass, live CI not yet run:** Slice 3.2 (CI gate). `pr-scope-check.mjs` now has Red tripwires, the test-assertion rule, and a `--strict` mode that spokes use to block a PR. Spoke workflow templates are in `.harness/templates/workflows/`. Hub-sync does not copy them into spokes yet.
 - **Not confirmed:** whether the live hooks wrote the slice checkpoint in this hub session. A scratch copy does write it, so the live hook did not run for that edit, and that is still open. It happened again for Slice 3.2.
-- **Up Next:** Slice 3.3 (guard switch for spokes)
+- **Built, tests pass, live spoke check not yet run:** Slice 3.3 (guard). Spokes in Manager Mode block source edits until a task is marked in progress (PLAN LOCK). Harness files, `.spec/harness.json`, and the AGENTS.md harness block are locked in spokes. The colour tag of an active slice is frozen. A Bash write tripwire blocks commands that write to harness files. A file is judged by its own git repo.
+- **Up Next:** Slice 3.4 (commands and relay), after Slice 3.3 is merged

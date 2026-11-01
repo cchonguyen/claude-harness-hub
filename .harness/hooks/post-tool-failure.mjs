@@ -54,7 +54,7 @@ fs.mkdirSync(path.join(root, '.spec'), { recursive: true });
 fs.writeFileSync(stateFile, JSON.stringify(allState, null, 2));
 
 if (strikes >= 2) {
-  const vibe = modeOf(root) === 'vibe';
+  const vibe = ['vibe', 'locked'].includes(modeOf(root)); // no active slice: the whole-tree restore applies
   console.log(JSON.stringify({
     hookSpecificOutput: {
       hookEventName: 'PostToolUseFailure',
