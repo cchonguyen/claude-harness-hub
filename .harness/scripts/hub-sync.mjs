@@ -12,7 +12,7 @@ const action = (process.argv[2] || 'pull').toLowerCase();
 const stagingFile = path.join(root, '.spec', '.learn-staging.txt');
 const ENGINE_PATHS = ['.claude', '.harness', '.harness-version'];
 // Spoke-owned templates: copied only when the spoke does not have the file yet, so local edits survive a sync
-const TEMPLATE_PATHS = ['.spec/AI_STUDIO_RULES.md'];
+const TEMPLATE_PATHS = ['.spec/EXTERNAL_AGENT_RULES.md', '.spec/AI_STUDIO_RULES.md'];
 const hub = (() => {
   try { return { repo: 'claude-harness-hub', branch: 'main', ...JSON.parse(fs.readFileSync(path.join(root, '.harness', 'hub.json'), 'utf8')) }; } catch { return { repo: 'claude-harness-hub', branch: 'main' }; }
 })();

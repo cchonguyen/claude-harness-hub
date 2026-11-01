@@ -9,7 +9,7 @@ disable-model-invocation: true
    - `- **Active Branch / State:** <output of git branch --show-current, plus a few words of status>`
    - `- **Files Modified in Last Turn:** <paths from git status --short, or "none">`
    - `- **Verification Status:** <command and result of the last green test or build this session, or "unverified">`
-   - `- **Immediate Next Step:** <the single immediate next action>`
+   - `- **Immediate Next Step for Claude:** <the single immediate next action>`
    - `- **Active Slice:** <the [IN_PROGRESS] slice line, or "none (Vibe Mode)">`
 3. Output this prompt for the new session, copied exactly:
    `"Resume work on this project. Read .spec/SESSION_HANDOFF.md and confirm our next slice. Do NOT edit files until confirmed."`
