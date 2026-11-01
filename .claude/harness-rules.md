@@ -41,7 +41,8 @@
   1. Run `git fetch origin <branch>` on the branch named in `Active Branch / State`.
   2. Review the diff against `main` and the files listed in `Files Modified in Last Turn`. Stay inside the `[IN_PROGRESS]` slice's `Target files:`.
   3. Run the quick checks from `CLAUDE.md` once, then record the results in `.spec/SESSION_HANDOFF.md`.
-  4. Merge only through the PR. Claude never merges an external branch without a green check.
+  4. Merge only through the PR. Claude never merges an external branch without a green check. Gemini or Antigravity may merge and deploy only under the conditions in `.spec/EXTERNAL_AGENT_RULES.md` section 4.
+  5. Review any external merge or deploy after the fact. Read the merge commit and deploy result that the handoff records, and check that they match the PR.
 - **Engine files:** External agents never edit `.claude/`, `.harness/`, or `.harness-version`. Those change only in this hub repo.
 
 ## Learned Operator Rules (Synced via `/learn`)
