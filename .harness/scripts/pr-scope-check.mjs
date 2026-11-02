@@ -12,9 +12,10 @@ const ACTIVE_TASK = /^\s*-\s*\[.\].*\[IN_PROGRESS\]/;
 const SLICE_TYPE = /\[(UI \/ VISUAL|CORE \/ DATA)\]/;
 const DONE_SLICE = /^\s*-\s*\[x\]\s*\*\*Slice\b/i;
 const TEST_FILE = /(\.test\.|\.spec\.)[^/]*$|(^|\/)test_[^/]*\.py$|_test\.(py|go)$/;
-const ASSERTION = /expect\(|assert|should|toBe|toEqual|raises|t\.Error|t\.Fatal/;
+export const isCommentLine = (line) => /^\s*(?:\/\/|#|--|\*|\/\*)/.test(line);
+export const ASSERTION = /expect\(|assert\(|assert\.|assert\s+|\.should|\.to\.be|\.toBe|\.toEqual|\.toMatch|\.toThrow|t\.(?:is|true|false|assert)\(|self\.assert|pytest\.raises|self\.assertRaises|t\.Error|t\.Fatal|require\.|assert!|assert_eq!|assert_ne!/;
 // Anchored to the start of a line, so the text inside a string or fixture does not count
-const SKIP_MARK = /^\s*(?:it|test|describe)\.(?:skip|only)\(|^\s*(?:xit|xdescribe)\(|^\s*@pytest\.mark\.skip|^\s*t\.(?:Skip|skip)\(/;
+export const SKIP_MARK = /^\s*(?:(?:it|test|describe)\.(?:skip|only)\(|(?:xit|xdescribe)\(|test\.todo\(|@(?:pytest\.mark\.)?skip|@unittest\.skip|pytest\.skip\(|t\.(?:Skip|skip)\()/;
 const MANIFEST = /(^|\/)(package\.json|package-lock\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lockb?|requirements[^/]*\.txt|pyproject\.toml|uv\.lock|go\.(mod|sum)|Cargo\.(toml|lock))$/;
 // Spoke-owned engine-adjacent files that a spoke may change even though they sit in an engine folder
 const SPOKE_OWNED = new Set(['.claude/project-rules.md', '.claude/settings.spoke.json']);
@@ -128,10 +129,14 @@ export function analyze({ changed, deleted = [], diff = new Map(), progress = ''
   let removedAsserts = 0;
   for (const [file, lines] of diff) {
     if (!isTestFile(file)) continue;
-    addedAsserts += lines.added.filter((l) => ASSERTION.test(l)).length;
-    removedAsserts += lines.removed.filter((l) => ASSERTION.test(l)).length;
     for (const line of lines.added) {
+      if (isCommentLine(line)) continue;
+      if (ASSERTION.test(line)) addedAsserts++;
       if (SKIP_MARK.test(line)) problems.push(`Test skipped or focused in ${file}: ${line.trim()}`);
+    }
+    for (const line of lines.removed) {
+      if (isCommentLine(line)) continue;
+      if (ASSERTION.test(line)) removedAsserts++;
     }
   }
   if (removedAsserts > addedAsserts) {

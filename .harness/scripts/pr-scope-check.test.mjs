@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { analyze, formatJsonVerdict, parseDiff, parseNameStatus } from './pr-scope-check.mjs';
+import { analyze, formatJsonVerdict, parseDiff, parseNameStatus, isCommentLine, ASSERTION, SKIP_MARK } from './pr-scope-check.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const SCRIPT = path.join(here, 'pr-scope-check.mjs');
@@ -348,4 +348,98 @@ test('CLI --json prints valid JSON verdict to stdout', () => {
   assert.equal(parsed.summary.changedFiles, 1);
 
   fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('comment lines containing assert do not count as added assertions', () => {
+  const r = analyze({
+    changed: ['src/foo.test.js'],
+    diff: testDiff('src/foo.test.js', [
+      '// assert(something)',
+      '  # assert x == 1',
+      '/* assert.equal(1, 1) */',
+      ' * assert(y)',
+      '-- assert this',
+    ]),
+    progress: ACTIVE('CORE / DATA', 'src/'),
+  });
+  assert.ok(r.problems.some((p) => p.includes('no assertion line was added')));
+
+  const r2 = analyze({
+    changed: ['src/foo.test.js'],
+    diff: testDiff('src/foo.test.js', ['// assert(replacement)'], ['assert(original);']),
+  });
+  assert.ok(r2.problems.some((p) => p.startsWith('Yellow: 1 assertion line(s) removed')));
+});
+
+test('comment lines with test.skip or skip marks are not flagged as skipped tests', () => {
+  const r = analyze({
+    changed: ['src/foo.test.js'],
+    diff: testDiff('src/foo.test.js', [
+      "// test.skip('disabled test', () => {});",
+      "// it.skip('skip me', () => {});",
+      '# @pytest.mark.skip',
+      '# pytest.skip("skip reason")',
+      '// test.todo("later")',
+      '/* describe.skip("suite", () => {}) */',
+      'expect(1).toBe(1);',
+    ]),
+  });
+  assert.deepEqual(r.problems, []);
+});
+
+test('modern assertions across frameworks are recognized as assertions', () => {
+  const assertions = [
+    { file: 'src/foo.test.js', line: 't.is(a, b);' },
+    { file: 'src/foo.test.js', line: 't.true(val);' },
+    { file: 'src/foo.test.js', line: 't.false(val);' },
+    { file: 'src/foo.test.js', line: 't.assert(val);' },
+    { file: 'src/foo.test.js', line: 'item.should.equal(1);' },
+    { file: 'src/foo.test.js', line: 'expect(val).to.be.true;' },
+    { file: 'src/foo.test.js', line: 'expect(val).toMatch(/regex/);' },
+    { file: 'src/foo.test.js', line: 'expect(fn).toThrow();' },
+    { file: 'tests/test_foo.py', line: 'self.assertEqual(a, b)' },
+    { file: 'tests/test_foo.py', line: 'assert a == b' },
+    { file: 'tests/test_foo.py', line: 'pytest.raises(ValueError)' },
+    { file: 'tests/test_foo.py', line: 'self.assertRaises(KeyError)' },
+    { file: 'tests/foo.test.rs', line: 'assert_eq!(a, b);' },
+    { file: 'tests/foo.test.rs', line: 'assert_ne!(a, b);' },
+    { file: 'tests/foo.test.rs', line: 'assert!(condition);' },
+    { file: 'pkg/foo_test.go', line: 'require.NoError(t, err)' },
+    { file: 'pkg/foo_test.go', line: 't.Error("failed")' },
+    { file: 'pkg/foo_test.go', line: 't.Fatal("failed")' },
+  ];
+
+  for (const { file, line } of assertions) {
+    const dir = file.split('/')[0];
+    const r = analyze({
+      changed: [file],
+      diff: testDiff(file, [line]),
+      progress: ACTIVE('CORE / DATA', `${dir}/`),
+    });
+    assert.deepEqual(r.problems, [], `Assertion line not recognized: ${line}`);
+  }
+});
+
+test('SKIP_MARK matches modern framework skip patterns when uncommented', () => {
+  const skipPatterns = [
+    "it.skip('later', () => {})",
+    "test.skip('later', () => {})",
+    "describe.skip('suite', () => {})",
+    "it.only('focus', () => {})",
+    "test.only('focus', () => {})",
+    "describe.only('focus', () => {})",
+    "xit('skip', () => {})",
+    "xdescribe('skip', () => {})",
+    "test.todo('todo test')",
+    "@pytest.mark.skip(reason='temp')",
+    "@skip('temp')",
+    "@unittest.skip('broken')",
+    "pytest.skip('skipping')",
+    "t.Skip('skip go test')",
+    "t.skip('skip go test')",
+  ];
+
+  for (const line of skipPatterns) {
+    assert.ok(SKIP_MARK.test(line), `Expected SKIP_MARK to match: ${line}`);
+  }
 });
