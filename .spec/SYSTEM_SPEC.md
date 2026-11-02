@@ -88,8 +88,8 @@ Source: Operator RFC, Antigravity adversarial review, and Claude architectural r
    - Handles all day-to-day slice implementation, unit testing, PR scope reviews, and debugging.
    - Runs on Haiku baseline (`engineer`, `auditor`, `clerk`), Gemini Flash/Pro in Antigravity/AI Studio, or Sonnet (`engineer-sonnet`) when escalated.
    - **Hard Rule: Opus is never used for Goldfish work.**
-3. **Dispatch Announcements:**
-   - No `.spec/.upshift-auth.json` and no `pre-tool-guard.mjs` `exit(2)` subagent block.
+3. **Dispatch Sizing & Mechanical Guard:**
+   - Guard 0 in `pre-tool-guard.mjs` mechanically verifies subagent dispatch against `.spec/SCOUT.md`: `architect-opus` is blocked unless `SCOUT.md` specifies Level 3, and `engineer-sonnet` is blocked unless `SCOUT.md` specifies Level 2 or 3.
    - Agents announce dispatch on Line 1: `🐘 Dispatching Elephant subagent (<name>)...` or `🐠 Dispatching Goldfish subagent (<name>)...`.
 
 ### 5.B Neutral Referee & Verification Trailers
@@ -102,7 +102,7 @@ Source: Operator RFC, Antigravity adversarial review, and Claude architectural r
      - `Referee-Tree: <tree-sha>` (from `git rev-parse HEAD^{tree}`)
      - `Referee-Engine: <referee-mjs-sha256>`
 3. **Zero-Turn Baton Pickup (`baton-pickup.mjs`):**
-   - On `/pickup`, if `HEAD` carries `Referee-Verdict: VERIFIED`, `git status --porcelain` is clean, and `git rev-parse HEAD^{tree}` matches `Referee-Tree`, prior work is cryptographically trusted without re-running checks in Claude.
+   - On `/pickup`, if `HEAD` carries `Referee-Verdict: VERIFIED`, `git status --porcelain` is clean, and `git rev-parse HEAD^{tree}` matches `Referee-Tree`, prior work is trusted via deterministic tree integrity and engine fingerprinting without re-running checks in Claude.
 4. **Natural Lull Detection:**
    - Detected deterministically in `referee.mjs` at clean slice commit boundaries without LLM tokens:
      - Cumulative session tool calls `>= 40` or committed slices `>= 3`.
