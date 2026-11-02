@@ -65,8 +65,8 @@ export function finishSlice(root, commitMsg, options = {}) {
   const sliceIdMatch = activeLine.match(/\*\*Slice\s+([^*]+)\*\*/);
   const sliceId = sliceIdMatch ? sliceIdMatch[1].trim() : 'active';
 
-  // Scope Neutrality (SYSTEM_SPEC 5.B): Read Target files from HEAD:.spec/PROGRESS.md to prevent
-  // workers from retroactively widening scope in the mutable working copy.
+  // Scope Neutrality (SYSTEM_SPEC 5.B): Read Target files strictly from HEAD:.spec/PROGRESS.md to prevent
+  // workers from retroactively widening scope in the mutable working copy. Fail closed if not in HEAD.
   let headProgress = '';
   try {
     headProgress = execFileSync('git', ['show', 'HEAD:.spec/PROGRESS.md'], {
@@ -74,20 +74,23 @@ export function finishSlice(root, commitMsg, options = {}) {
     });
   } catch {}
 
-  let targets = [];
-  if (headProgress) {
-    const headLines = headProgress.split('\n');
-    const headSliceLine = headLines.find((l) =>
-      (sliceIdMatch && l.includes(sliceIdMatch[0])) ||
-      l.includes(`**Slice ${sliceId}**`) ||
-      l.includes(`**Slice ${sliceId}:`)
-    );
-    if (headSliceLine) {
-      targets = parseActiveTargets(headSliceLine);
-    }
+  if (!headProgress) {
+    throw new Error('Scope neutrality violation: HEAD:.spec/PROGRESS.md could not be read from git.');
   }
+
+  const headLines = headProgress.split('\n');
+  const headSliceLine = headLines.find((l) =>
+    (sliceIdMatch && l.includes(sliceIdMatch[0])) ||
+    l.includes(`**Slice ${sliceId}**`) ||
+    l.includes(`**Slice ${sliceId}:`)
+  );
+  if (!headSliceLine) {
+    throw new Error(`Scope neutrality violation: Slice ${sliceId} does not exist in HEAD:.spec/PROGRESS.md. Commit slice plan to HEAD before implementing.`);
+  }
+
+  const targets = parseActiveTargets(headSliceLine);
   if (targets.length === 0) {
-    targets = parseActiveTargets(activeLine);
+    throw new Error(`Scope neutrality violation: Slice ${sliceId} in HEAD:.spec/PROGRESS.md declares no Target files.`);
   }
 
   // 2. Enforce scope neutrality before modifying or staging files

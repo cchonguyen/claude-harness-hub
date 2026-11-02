@@ -153,3 +153,35 @@ test('finishSlice enforces scope neutrality from HEAD to prevent working-copy ta
 
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+test('finishSlice fails closed when slice exists only in working copy and not in HEAD', () => {
+  const dir = makeRepo();
+  const git = (...args) => execFileSync('git', args, { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+
+  fs.mkdirSync(path.join(dir, '.spec'), { recursive: true });
+  fs.mkdirSync(path.join(dir, '.harness', 'scripts'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.harness', 'scripts', 'referee.mjs'), '// referee');
+  fs.writeFileSync(path.join(dir, '.spec', 'SESSION_HANDOFF.md'), '**Active Slice:** Slice 2\n');
+  fs.writeFileSync(
+    path.join(dir, '.spec', 'PROGRESS.md'),
+    '# Progress\n- [ ] **Slice 1** `[GREEN][CORE / DATA]`: Committed slice — Target files: test.txt\n'
+  );
+  fs.writeFileSync(path.join(dir, 'test.txt'), 'content');
+
+  git('add', '-A');
+  git('commit', '-m', 'init');
+
+  // Working copy invents an uncommitted Slice 2
+  fs.writeFileSync(
+    path.join(dir, '.spec', 'PROGRESS.md'),
+    '# Progress\n- [ ] **Slice 1** `[GREEN][CORE / DATA]`: Committed slice — Target files: test.txt\n- [ ] **Slice 2** `[GREEN][CORE / DATA]`: Uncommitted slice — Target files: test.txt [IN_PROGRESS]\n'
+  );
+  fs.writeFileSync(path.join(dir, 'test.txt'), 'updated');
+
+  assert.throws(
+    () => finishSlice(dir, 'feat: finish uncommitted slice', { skipChecks: true }),
+    /Scope neutrality violation: Slice 2 does not exist in HEAD:\.spec\/PROGRESS\.md/
+  );
+
+  fs.rmSync(dir, { recursive: true, force: true });
+});
