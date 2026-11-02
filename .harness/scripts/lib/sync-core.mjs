@@ -105,6 +105,7 @@ export function mergeSettings(hub, spoke, spokeExtra) {
   const allow = unique([...(hubPerm.allow || []), ...(spokePerm.allow || []), ...(extra.allow || [])])
     .filter((entry) => !denied.has(entry));
   return {
+    ...(hub.model ? { model: hub.model } : {}),
     ...spoke,
     hooks: hub.hooks ?? spoke.hooks,
     permissions: { ...(spoke.permissions || {}), allow, deny },

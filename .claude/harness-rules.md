@@ -1,15 +1,20 @@
-# Claude Code Harness Contract (v2.2)
+# Claude Code Harness Contract (v3.1)
 
-## Core Communication & Anti-Churn Rules
+## Core Communication & Silent Batching Rules
 - **Substantive Inception:** Start immediately with output or action. Zero pleasantries, apologies, or filler.
-- **Anti-Echo Protocol (always):** Never reprint full files, unchanged code blocks, or `.spec/HANDOFF_PACKET.md`.
-- **1-Line Receipts (slash commands only):** When an autonomous slash command (`/init-harness`, `/triage`, `/spec`, `/implement`, `/prep-audit`, `/ingest-feedback`, `/sync-harness`, `/learn`, `/checkpoint-handoff`, `/prep-debug`, `/review-pr`) completes, output ONLY a 1-line receipt (e.g., `✓ Updated .spec/PROGRESS.md: Slice 2 verified.`). Normal conversational questions get clear, natural answers.
-- **Plain-English Transparency:** Write all documentation, summaries, and explanations without dense jargon so the operator can audit system state at a glance.
+- **Anti-Echo Protocol (always):** Never reprint full files, unchanged code blocks, `.spec/HANDOFF_PACKET.md`, or `.spec/BRIEFING_PACKET.md`.
+- **Silent Batching & 1-Line Receipts:** Hooks and scripts automatically queue operational telemetry into `.spec/STATUS_BATCH.jsonl` for the Gemini Briefing Agent. When an autonomous slash command (`/init-harness`, `/triage`, `/spec`, `/implement`, `/prep-audit`, `/ingest-feedback`, `/sync-harness`, `/learn`, `/checkpoint-handoff`, `/prep-debug`, `/review-pr`, `/pickup`, `/brief`) completes, output ONLY a 1-line receipt (e.g., `✓ Updated .spec/PROGRESS.md: Slice 2 verified.`). Never spend chat output tokens narrating multi-paragraph status updates under the hood; delegate status digests to `.spec/OVERVIEW.md` (at milestones) and the Gemini Briefing Agent (`/brief` or Antigravity `brief me`).
 - **Deterministic Step-by-Step Instructions:** Never give vague directions. Always write explicit, numbered click-by-click steps: `Step 1: Go to [URL] -> Step 2: Click [Tab] -> Step 3: Paste into [Field]`.
-- **Dedicated Action Footer:** Omit closing questions when working autonomously. ONLY when blocked on human input, decision, or external Gemini review, conclude with:
+- **Dedicated Action Footer:** Omit closing questions when working autonomously. ONLY when blocked on human input, an Upshift Threshold pause, or external Gemini review, conclude with:
   ---
   Needed from you:
   1. [Exact step-by-step action or decision required]
+
+## Model Tiering & Anti-Silent-Upshift Rules
+- **Baseline Haiku Default:** Main session orchestration (`settings.json`), all direct implementation of clearly spec'd slices (`engineer`), `discovery`, `auditor`, and handoff housekeeping (`clerk`) run on **Haiku**.
+- **Standard Sonnet Architecture & 1st Upshift:** Standard `/spec` uses `architect` (**Sonnet**). Implementation upshifts to `engineer-sonnet` (**Sonnet**) ONLY when the operator explicitly runs `/implement sonnet`.
+- **Opus Strictly Operator-Locked:** `architect-opus` (**Opus**) is used ONLY when the operator explicitly runs `/spec opus` for complex multi-system orchestration or architectural deadlocks. Never silently upshift models or edit `.spec/.upshift-auth.json`.
+- **Conservative Upshift Gate ("Silent When Green"):** `evaluate-upshift.mjs` runs automatically before `/implement` and `/spec`. It stays silent below threshold and pauses for operator confirmation ONLY when `>=5` target files are listed, spec blockers exist, or the 2-Strike Circuit Breaker is active.
 
 ## Work Modes (read from `.spec/PROGRESS.md`)
 - **Vibe Mode (no `[IN_PROGRESS]` slice, or no `.spec/PROGRESS.md`):** Edit the requested files directly. Do NOT require `/triage` or `/spec` first. The harness snapshots the working tree at session start and advances a "last known green" checkpoint every time a test or build passes (lint and typecheck passes do not move it).
@@ -40,13 +45,10 @@
 ## External Co-Development (Google Antigravity & AI Studio)
 - **Contract:** External relief implementors follow `.spec/EXTERNAL_AGENT_RULES.md`. `.spec/AI_STUDIO_RULES.md` is an alias that points to it.
 - **Handoff format:** Every platform overwrites `.spec/SESSION_HANDOFF.md` with the same five fields, including `Last Active Platform`.
-- **Ingest on return:** When `.spec/SESSION_HANDOFF.md` names an external `Last Active Platform`, treat that work as untrusted until you verify it:
-  1. Run `git fetch origin <branch>` on the branch named in `Active Branch / State`.
-  2. Review the diff against `main` and the files listed in `Files Modified in Last Turn`. Stay inside the `[IN_PROGRESS]` slice's `Target files:`.
-  3. Run the quick checks from `CLAUDE.md` once, then record the results in `.spec/SESSION_HANDOFF.md`.
-  4. Merge only through the PR. Claude never merges an external branch without a green check. Gemini or Antigravity may merge and deploy only under the conditions in `.spec/EXTERNAL_AGENT_RULES.md` section 4.
-  5. Review any external merge or deploy after the fact. Read the merge commit and deploy result that the handoff records, and check that they match the PR.
-- **Engine files:** External agents never edit `.claude/`, `.harness/`, or `.harness-version`. Those change only in this hub repo.
+- **Zero-Turn Ingest on Return (`/pickup`):** When `.spec/SESSION_HANDOFF.md` names an external `Last Active Platform`, avoid multi-turn main-thread git exploration:
+  1. Start a fresh session (`/clear`) and run `/pickup` (`node .harness/scripts/baton-pickup.mjs`) or delegate to the `clerk` / `auditor` (Haiku) subagent.
+  2. If the external agent has not yet run quick checks (e.g. AI Studio), run the quick checks from `CLAUDE.md` once via `auditor` (Haiku) and record results in `.spec/SESSION_HANDOFF.md`. If Antigravity already verified and merged under `.spec/EXTERNAL_AGENT_RULES.md` section 4, trust the recorded receipt and proceed directly to the next slice without re-running checks in Claude.
+- **Engine files:** External agents never edit `.claude/`, `.harness/`, or `.harness-version` in spoke repos. Those change only in this hub repo.
 
 ## Learned Operator Rules (Synced via `/learn`)
 - Always preserve plain-English auditability in `.spec/OVERVIEW.md` at major feature milestones.

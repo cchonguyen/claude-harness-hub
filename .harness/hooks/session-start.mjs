@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { activeLines, ensureBaseline, resolveRoot } from './lib/vibe.mjs';
 import { branchOwnerOf, mainRedState, MAIN_RED_TAG } from './lib/session-signals.mjs';
+import { readBatchEvents } from '../scripts/status-batch.mjs';
 
 const root = resolveRoot();
 const handoffPath = path.join(root, '.spec', 'SESSION_HANDOFF.md');
@@ -13,9 +14,10 @@ try { event = JSON.parse(fs.readFileSync(0, 'utf8')); } catch {}
 // Vibe Mode baseline: snapshot the tree before any edit so --restore has something to go back to
 try { ensureBaseline(root, event.session_id || 'default'); } catch {}
 
-let version = '2.2.0';
+let version = '3.1.0';
 try { version = fs.readFileSync(path.join(root, '.harness-version'), 'utf8').trim() || version; } catch {}
-let contextMsg = `✓ Harness v${version} active (Node ${process.version}).`;
+const batchCount = readBatchEvents(root).length;
+let contextMsg = `✓ Harness v${version} active (Node ${process.version}, Model tier: Haiku baseline, Batch queue: ${batchCount} event(s)).`;
 
 // Main-red (4.C.3): while the tag exists on origin, no new slices start. Fixing main is the only work.
 const redState = mainRedState(root);

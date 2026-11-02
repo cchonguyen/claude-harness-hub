@@ -1,4 +1,5 @@
 {
+  "model": "haiku",
   "permissions": {
     "allow": [
       "Bash(node \"$CLAUDE_PROJECT_DIR\"/.harness/*)",
@@ -32,7 +33,7 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "Edit|Write|NotebookEdit",
+        "matcher": "Agent|Task|Edit|Write|NotebookEdit",
         "hooks": [
           {
             "type": "command",

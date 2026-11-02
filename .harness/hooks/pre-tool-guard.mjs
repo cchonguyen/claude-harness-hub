@@ -7,6 +7,8 @@ import { modeOf, readCheckpoints, ensureBaseline, diffSince } from './lib/vibe.m
 import {
   agentsBlock, colourOf, isEngineLocked, isEnginePath, isHubOrigin, nextContent,
 } from './lib/guard-rules.mjs';
+import { appendBatchEvent } from '../scripts/status-batch.mjs';
+import { clearUpshiftAuth, verifyUpshiftAuth } from '../scripts/evaluate-upshift.mjs';
 
 const gitIn = (cwd, args, env = {}) =>
   execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'], env: { ...process.env, ...env } }).trim();
@@ -119,22 +121,55 @@ if (process.argv[2] === '--restore') {
       removed.push(file);
     }
   }
-  console.log(`✓ Restored ${restored.length} file(s) to the ${label}${removed.length ? `; removed ${removed.length} file(s) the slice created (${removed.join(', ')})` : ''}.`);
+  const msg = `✓ Restored ${restored.length} file(s) to the ${label}${removed.length ? `; removed ${removed.length} file(s) the slice created (${removed.join(', ')})` : ''}.`;
+  appendBatchEvent(root, { event: 'slice_restore', summary: msg });
+  console.log(msg);
   process.exit(0);
 }
 
 let event = {};
 try { event = JSON.parse(fs.readFileSync(0, 'utf8')); } catch { process.exit(0); }
 
+// Guard 0: Block silent subagent upshifts (engineer-sonnet / architect-opus require explicit operator authorization)
+if (event.tool_name === 'Agent' || event.tool_name === 'Task') {
+  const subagentType = String(event.tool_input?.subagent_type || event.tool_input?.name || '').trim();
+  const authCheck = verifyUpshiftAuth(root, subagentType);
+  if (!authCheck.allowed) {
+    console.error(authCheck.reason);
+    process.exit(2);
+  }
+  process.exit(0);
+}
+
 const targetFile = event.tool_input?.file_path || event.tool_input?.notebook_path || '';
 if (!targetFile) process.exit(0);
 
+// Resolve symlinks (e.g. macOS /var -> /private/var) on the deepest existing ancestor so git's realpath matches targetFile
+function canonicalPath(p) {
+  const abs = path.resolve(p);
+  let cur = abs;
+  const tail = [];
+  while (!fs.existsSync(cur) && path.dirname(cur) !== cur) {
+    tail.unshift(path.basename(cur));
+    cur = path.dirname(cur);
+  }
+  try { cur = fs.realpathSync(cur); } catch {}
+  return path.join(cur, ...tail);
+}
+
 // A file is governed by the git repo it lives in, so a session with two attached repos checks each one's rules
 const fileRepo = repoRootOf(path.resolve(root, targetFile));
-if (fileRepo) useRepo(fileRepo);
+if (fileRepo) useRepo(canonicalPath(fileRepo));
+else useRepo(canonicalPath(root));
 
-const absTarget = path.resolve(root, targetFile);
+const absTarget = canonicalPath(path.resolve(root, targetFile));
 const relTarget = path.relative(root, absTarget).replace(/\\/g, '/');
+
+// Block direct model Write/Edit to .spec/.upshift-auth.json (only evaluate-upshift.mjs may write it)
+if (relTarget === '.spec/.upshift-auth.json') {
+  console.error('UPSHIFT LOCK VIOLATION: .spec/.upshift-auth.json is managed exclusively by operator slash-command flags (/implement sonnet, /spec opus).');
+  process.exit(2);
+}
 
 // 0. Files outside any project (e.g. ~/.claude memory) are not governed by the slice lock
 if (relTarget.startsWith('../') || path.isAbsolute(relTarget)) process.exit(0);
@@ -163,8 +198,26 @@ if (relTarget === '.spec/PROGRESS.md') {
     console.error(`COLOUR LOCK: The colour tag on the active slice is frozen at /spec. Keep ${colourOf(previousActive) || 'its current tag'}; only the architect changes it.`);
     process.exit(2);
   }
-  if (activeTaskLines.length === 1 && sliceId(activeTaskLines[0]) !== sliceId(previousActive)) {
+  const prevId = sliceId(previousActive);
+  const nextId = sliceId(activeTaskLines[0]);
+  if (previousActive && prevId !== nextId) {
+    const completedNow = incoming.split('\n').some((l) => /^\s*-\s*\[x\]/i.test(l) && sliceId(l) === prevId);
+    if (completedNow) {
+      clearUpshiftAuth(root);
+      appendBatchEvent(root, {
+        event: 'slice_complete',
+        slice: `Slice ${prevId}`,
+        summary: `Completed Slice ${prevId}`
+      });
+    }
+  }
+  if (activeTaskLines.length === 1 && nextId !== prevId) {
     captureCheckpoint();
+    appendBatchEvent(root, {
+      event: 'slice_start',
+      slice: `Slice ${nextId}`,
+      summary: `Locked and started Slice ${nextId} (checkpoint saved)`
+    });
   }
   process.exit(0);
 }

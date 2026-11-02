@@ -130,4 +130,18 @@ test('bash guard lets reads and the restore command through, and ignores the hub
   assert.equal(run(hub, 'echo x > .harness/x.mjs'), 0);
 });
 
+test('silent upshift to engineer-sonnet or architect-opus is blocked without operator authorization', () => {
+  const dir = makeRepo({ files: { '.spec/PROGRESS.md': SLICE('src/app.js') } });
+  const blocked = runHook(GUARD, dir, { tool_name: 'Agent', tool_input: { subagent_type: 'engineer-sonnet' } });
+  assert.equal(blocked.status, 2);
+  assert.match(blocked.stderr, /SILENT UPSHIFT BLOCKED/);
+
+  const baselineOk = runHook(GUARD, dir, { tool_name: 'Agent', tool_input: { subagent_type: 'engineer' } });
+  assert.equal(baselineOk.status, 0);
+
+  const directEditAuth = runHook(GUARD, dir, edit(dir, '.spec/.upshift-auth.json'));
+  assert.equal(directEditAuth.status, 2);
+  assert.match(directEditAuth.stderr, /UPSHIFT LOCK VIOLATION/);
+});
+
 after(() => { for (const dir of dirs) fs.rmSync(dir, { recursive: true, force: true }); });

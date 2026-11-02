@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { isTestOrBuild as matchRunner, advancesGreen } from './lib/runner-matcher.mjs';
 import { modeOf, saveCheckpoint, resolveRoot } from './lib/vibe.mjs';
+import { appendBatchEvent } from '../scripts/status-batch.mjs';
 
 const root = resolveRoot();
 const stateFile = path.join(root, '.spec', '.strike-counter.json');
@@ -15,15 +16,21 @@ const cmd = event.tool_input?.command || '';
 // Only real test/build runners, so `cat test/x` or `git commit -m "build"` are never touched
 const isTestOrBuild = matchRunner(cmd);
 
-// 1. Reset strike counter for this session when a test/build command succeeds
-if (isTestOrBuild && fs.existsSync(stateFile)) {
-  try {
-    const state = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
-    if (state[sessionId]?.strikes > 0) {
-      state[sessionId] = { strikes: 0, lastSig: '' };
-      fs.writeFileSync(stateFile, JSON.stringify(state, null, 2));
-    }
-  } catch {}
+// 1. Reset strike counter for this session and queue batch telemetry when a test/build command succeeds
+if (isTestOrBuild) {
+  appendBatchEvent(root, {
+    event: 'verify_pass',
+    summary: `Verification passed: ${cmd.slice(0, 80)}`
+  });
+  if (fs.existsSync(stateFile)) {
+    try {
+      const state = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
+      if (state[sessionId]?.strikes > 0) {
+        state[sessionId] = { strikes: 0, lastSig: '' };
+        fs.writeFileSync(stateFile, JSON.stringify(state, null, 2));
+      }
+    } catch {}
+  }
 }
 
 // 1b. Vibe Mode: a passing test or build advances the "last known green" checkpoint (PostToolUse only fires on success); lint/typecheck passes do not

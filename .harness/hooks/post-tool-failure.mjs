@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { isTestOrBuild as matchRunner } from './lib/runner-matcher.mjs';
 import { modeOf, resolveRoot } from './lib/vibe.mjs';
+import { appendBatchEvent } from '../scripts/status-batch.mjs';
 
 const root = resolveRoot();
 const stateFile = path.join(root, '.spec', '.strike-counter.json');
@@ -54,11 +55,16 @@ fs.mkdirSync(path.join(root, '.spec'), { recursive: true });
 fs.writeFileSync(stateFile, JSON.stringify(allState, null, 2));
 
 if (strikes >= 2) {
+  appendBatchEvent(root, {
+    event: 'circuit_breaker',
+    summary: `2-Strike Circuit Breaker tripped on "${cmd.slice(0, 60)}"`,
+    details: errorSig
+  });
   const vibe = ['vibe', 'locked'].includes(modeOf(root)); // no active slice: the whole-tree restore applies
   console.log(JSON.stringify({
     hookSpecificOutput: {
       hookEventName: 'PostToolUseFailure',
-      additionalContext: `CIRCUIT BREAKER TRIGGERED (2 Consecutive Identical Test/Build Failures): Stop guessing immediately. Run node .harness/hooks/pre-tool-guard.mjs --restore (${vibe ? 'restores the last known green checkpoint, or lists changed files if nothing has passed yet' : 'restores ONLY the active slice target files to the slice-start checkpoint'}), then output a "Needed from you:" block offering /prep-audit diff.`
+      additionalContext: `CIRCUIT BREAKER TRIGGERED (2 Consecutive Identical Test/Build Failures): Stop guessing immediately. Run node .harness/hooks/pre-tool-guard.mjs --restore (${vibe ? 'restores the last known green checkpoint, or lists changed files if nothing has passed yet' : 'restores ONLY the active slice target files to the slice-start checkpoint'}), then output a "Needed from you:" block offering: (1) Free Gemini audit via /prep-audit diff, or (2) Model upshift via /implement sonnet.`
     }
   }));
 }
