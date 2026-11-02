@@ -74,3 +74,40 @@ Source: Claude review of the v3.0 RFC, operator decisions, and the Antigravity a
 - `/learn` push is unchanged: fresh `claude/learn-*` branch off `origin/main` in the sibling hub checkout, then a PR.
 - `bundle-handoff.mjs` drops lockfiles from the diff and adds a one-line "lockfile changed" note.
 - `runner-matcher.mjs` adds `go test`, `cargo (test|build)`, `python -m (pytest|unittest)`, `make (test|check)`; `.spec/harness.json` may list extra spoke check commands under `"checks"`.
+
+## 5. Harness v3.2 "Autonomous Referee & Turn-Collapsing Engine" Contract
+Source: Operator RFC, Antigravity adversarial review, and Claude architectural review (ADR-010).
+
+### 5.A Cognitive Separation: Elephant vs. Goldfish
+1. **The Elephant (Planning, Architecture, Spec Finalization):**
+   - Active during discovery, architecture design, major refactoring, and locking `.spec/` documentation (`SYSTEM_SPEC.md`, `DECISIONS.md`, `OVERVIEW.md`, `PROGRESS.md`).
+   - Uses `architect` (Sonnet) by default, and `architect-opus` (Opus) when deep architectural synthesis is needed.
+   - Entry flow: `/triage` acts as a factual Scout writing `.spec/SCOUT.md` (`Files-Touched`, `Contract-Change`, `Cross-Module`). `evaluate-upshift.mjs` maps these fields via a deterministic table to Scout-Level (1: Goldfish `/quick-fix`, 2: Sonnet `architect`, 3: Opus `architect-opus`). Opus is dispatched only when `SCOUT.md` is Level 3 or explicit `/spec opus` was passed.
+   - Goal: Leave behind self-contained contracts and atomic (`<5` target files), risk-tagged slices in `.spec/PROGRESS.md` so implementation requires zero long-horizon memory.
+2. **The Goldfish (Stateless Implementation & Review):**
+   - Handles all day-to-day slice implementation, unit testing, PR scope reviews, and debugging.
+   - Runs on Haiku baseline (`engineer`, `auditor`, `clerk`), Gemini Flash/Pro in Antigravity/AI Studio, or Sonnet (`engineer-sonnet`) when escalated.
+   - **Hard Rule: Opus is never used for Goldfish work.**
+3. **Dispatch Announcements:**
+   - No `.spec/.upshift-auth.json` and no `pre-tool-guard.mjs` `exit(2)` subagent block.
+   - Agents announce dispatch on Line 1: `🐘 Dispatching Elephant subagent (<name>)...` or `🐠 Dispatching Goldfish subagent (<name>)...`.
+
+### 5.B Neutral Referee & Verification Trailers
+1. **Neutral Arbiter (`referee.mjs`):**
+   - Pure, zero-dependency Node script that evaluates repository health, scope adherence, test rules, and natural lulls. Never modifies application source code.
+   - **Scope Neutrality:** Reads target files from `HEAD:.spec/PROGRESS.md` (`git show HEAD:.spec/PROGRESS.md`), not the mutable working copy, preventing workers from retroactively widening scope.
+2. **Commit Trailers:**
+   - `finish-slice.mjs` verifies the slice and commits using Git trailers:
+     - `Referee-Verdict: VERIFIED`
+     - `Referee-Tree: <tree-sha>` (from `git rev-parse HEAD^{tree}`)
+     - `Referee-Engine: <referee-mjs-sha256>`
+3. **Zero-Turn Baton Pickup (`baton-pickup.mjs`):**
+   - On `/pickup`, if `HEAD` carries `Referee-Verdict: VERIFIED`, `git status --porcelain` is clean, and `git rev-parse HEAD^{tree}` matches `Referee-Tree`, prior work is cryptographically trusted without re-running checks in Claude.
+4. **Natural Lull Detection:**
+   - Detected deterministically in `referee.mjs` at clean slice commit boundaries without LLM tokens:
+     - Cumulative session tool calls `>= 40` or committed slices `>= 3`.
+     - Upcoming slice is `[RED]`, or transitions between `[GREEN]` and `[YELLOW]` or `[CORE / DATA]` and `[UI / VISUAL]`.
+     - Milestone heading complete in `PROGRESS.md`.
+     - Immediately after a 2-strike restore.
+   - Halts `/implement` auto-chaining cleanly.
+   - Mid-slice backstop in `post-tool-scrub.mjs`: emits a 1-line soft advisory nudge when mutating tool calls (`Edit`/`Write`/`Bash`) on the active slice reach 15.
