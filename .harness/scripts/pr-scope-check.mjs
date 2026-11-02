@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 // Scope, tripwire, and test check for a pull request.
-// Usage: node .harness/scripts/pr-scope-check.mjs [base=origin/main] [head=HEAD] [--strict]
+// Usage: node .harness/scripts/pr-scope-check.mjs [base=origin/main] [head=HEAD] [--strict] [--json] [--output-verdict <file>]
 //   Hub (default): advisory. Prints problems and always exits 0.
 //   Spoke (--strict): blocking. Exits 1 on any problem so the PR check shows red.
+import fs from 'node:fs';
+import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 
@@ -159,9 +161,71 @@ export function report({ changed, problems, notes, tripwireFired, strict }) {
   return lines.join('\n');
 }
 
+export function formatJsonVerdict({
+  changed = [],
+  deleted = [],
+  diff = new Map(),
+  progress = '',
+  strict = false,
+  base = 'origin/main',
+  head = 'HEAD',
+  problems = [],
+  notes = [],
+  tripwireFired = false,
+  sliceType = null,
+} = {}) {
+  return {
+    schemaVersion: "1.0.0",
+    timestamp: new Date().toISOString(),
+    verdict: problems.length === 0 ? "CLEAN" : "NEEDS_CHANGES",
+    mode: strict ? "strict" : "advisory",
+    target: { base, head },
+    summary: {
+      changedFiles: changed.length,
+      deletedFiles: deleted.length,
+      problemCount: problems.length,
+      tripwireFired,
+      noteCount: notes.length,
+    },
+    sliceType,
+    findings: problems.map((msg, i) => {
+      let type = "other";
+      if (msg.startsWith("Red tripwire")) type = "tripwire";
+      else if (msg.includes("Target files") || msg.includes("IN_PROGRESS")) type = "scope";
+      else if (msg.toLowerCase().includes("test") || msg.toLowerCase().includes("assertion")) type = "test";
+      else if (msg.includes("engine file")) type = "engine";
+      return {
+        id: `REV-${String(i + 1).padStart(3, '0')}`,
+        type,
+        severity: tripwireFired || strict ? "error" : "warning",
+        message: msg,
+        status: "open",
+      };
+    }),
+    notes,
+  };
+}
+
 function main(argv) {
   const strict = argv.includes('--strict');
-  const [base = 'origin/main', head = 'HEAD'] = argv.filter((a) => !a.startsWith('--'));
+  const jsonOutput = argv.includes('--json');
+  let outputVerdictFile = null;
+  const positionals = [];
+
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+    if (arg === '--strict' || arg === '--json') {
+      continue;
+    } else if (arg === '--output-verdict') {
+      outputVerdictFile = argv[++i];
+    } else if (arg.startsWith('--output-verdict=')) {
+      outputVerdictFile = arg.slice('--output-verdict='.length);
+    } else if (!arg.startsWith('--')) {
+      positionals.push(arg);
+    }
+  }
+
+  const [base = 'origin/main', head = 'HEAD'] = positionals;
   const root = process.env.CLAUDE_PROJECT_DIR || process.cwd();
   const git = (...args) => execFileSync('git', args, {
     cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 64 * 1024 * 1024,
@@ -181,8 +245,34 @@ function main(argv) {
   try { progress = git('show', `${head}:.spec/PROGRESS.md`); } catch { /* no PROGRESS file: Vibe Mode */ }
 
   const { changed, deleted } = parseNameStatus(nameStatus);
-  const result = analyze({ changed, deleted, diff: parseDiff(diffText), progress, strict });
-  console.log(report({ changed, strict, ...result }));
+  const diff = parseDiff(diffText);
+  const result = analyze({ changed, deleted, diff, progress, strict });
+
+  const verdict = formatJsonVerdict({
+    changed,
+    deleted,
+    diff,
+    progress,
+    strict,
+    base,
+    head,
+    ...result,
+  });
+
+  if (outputVerdictFile) {
+    const targetPath = path.isAbsolute(outputVerdictFile)
+      ? outputVerdictFile
+      : path.resolve(root, outputVerdictFile);
+    fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+    fs.writeFileSync(targetPath, JSON.stringify(verdict, null, 2) + '\n', 'utf8');
+  }
+
+  if (jsonOutput) {
+    console.log(JSON.stringify(verdict, null, 2));
+  } else {
+    console.log(report({ changed, strict, ...result }));
+  }
+
   process.exit(strict && result.problems.length > 0 ? 1 : 0);
 }
 

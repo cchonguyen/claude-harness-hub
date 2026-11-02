@@ -49,6 +49,7 @@
   1. Start a fresh session (`/clear`) and run `/pickup` (`node .harness/scripts/baton-pickup.mjs`) or delegate to the `clerk` / `auditor` (Haiku) subagent.
   2. If the external agent has not yet run quick checks (e.g. AI Studio), run the quick checks from `CLAUDE.md` once via `auditor` (Haiku) and record results in `.spec/SESSION_HANDOFF.md`. If Antigravity already verified and merged under `.spec/EXTERNAL_AGENT_RULES.md` section 4, trust the recorded receipt and proceed directly to the next slice without re-running checks in Claude.
 - **Engine files:** External agents never edit `.claude/`, `.harness/`, or `.harness-version` in spoke repos. Those change only in this hub repo.
+- **Audit Registry & Relay:** Review findings and verdicts are recorded in `.spec/AUDIT_VERDICT.json` and posted as PR review comments with structured verdicts (`CLEAN` or `NEEDS CHANGES`).
 
 ## Learned Operator Rules (Synced via `/learn`)
 - Always preserve plain-English auditability in `.spec/OVERVIEW.md` at major feature milestones.

@@ -7,12 +7,14 @@ Before modifying any files:
 2. Read `.spec/SYSTEM_SPEC.md` (data contracts and "Do NOT Build" boundaries).
 3. Read `.spec/PROGRESS.md` (current task queue and active `[IN_PROGRESS]` slice).
 4. Read `.spec/SESSION_HANDOFF.md` (last active state and directives).
+5. Check `.spec/AUDIT_VERDICT.json` (if present) for recorded review verdicts or pending audit comments.
 
 ## 2. BOUNDED EXECUTION CONTRACT
 - If a task in `.spec/PROGRESS.md` is `[IN_PROGRESS]`, modify ONLY its designated `Target files:`.
 - Never modify engine files in `.claude/`, `.harness/`, or `.harness-version`.
 - Do not start a new slice while origin has the tag `harness-main-red` (`git ls-remote --tags origin harness-main-red` prints a line). Fixing main is the only work until it is gone.
-- Read the `Branch Owner` line in `.spec/SESSION_HANDOFF.md`. Push only to a branch you own. If the owner is Claude, open `antigravity/<slice>` or comment on the PR instead.
+- Read the `Branch Owner` line in `.spec/SESSION_HANDOFF.md`. Push only to a branch you own. If the owner is Claude, open `antigravity/<slice>` or comment on the PR instead: check `.spec/AUDIT_VERDICT.json` and post PR review comments with structured verdicts (`CLEAN` or `NEEDS CHANGES`).
+- If a build or test command fails twice in a row with the same error (2-strike circuit breaker), stop guessing edits and run `node .harness/hooks/pre-tool-guard.mjs --restore` to reset modified files to the slice-start checkpoint (in Slice Mode) or the last known green checkpoint (in Vibe Mode).
 - Never push or merge to `main`. Never merge a PR with a red or missing check.
 - Do not introduce unsolicited dependencies or modify database schemas without explicit instruction.
 - If running in an environment with bash/terminal access (e.g., Google Antigravity), run the quick checks from `CLAUDE.md` once after your final edit: `npm run typecheck --silent`, `npm run lint --silent`, and `node --test .harness/hooks/lib/runner-matcher.test.mjs`.
@@ -34,8 +36,11 @@ You MUST update the tracking files:
 - Record each check you ran with its exact command and result. A check you did not run is "unverified". Never write "passed" for a check you did not run.
 - Mark a slice `[x]` in `.spec/PROGRESS.md` only if its verification passed. Otherwise leave it `[IN_PROGRESS]`.
 - Commit only on the branch named in the request or in `.spec/SESSION_HANDOFF.md`. Never push to `main` directly.
-- Use `node .harness/scripts/finish-slice.mjs "<commit message>"` to commit finished slices so cryptographic `Referee-*` trailers are attached.
+- Use `node .harness/scripts/finish-slice.mjs "<commit message>"` to commit finished slices so `Referee-*` integrity trailers (verdict, tree SHA, and engine hash) are attached.
 - Write commit messages that say what changed and why, in plain English.
+- Code review findings and audit verdicts: Check `.spec/AUDIT_VERDICT.json` before modifying code. When reviewing PRs or slices, record findings in `.spec/AUDIT_VERDICT.json` and post PR review comments with structured verdicts (`CLEAN` or `NEEDS CHANGES`).
+- 2-Strike Circuit Breaker: If build or test commands fail twice consecutively with the same error, do not guess or experiment with successive edits. Run `node .harness/hooks/pre-tool-guard.mjs --restore` to roll back to the clean slice-start checkpoint (Slice Mode) or last known green checkpoint (Vibe Mode).
+- Main-red rule: Before starting any slice or PR merge, verify that origin does not have the `harness-main-red` tag (`git ls-remote --tags origin harness-main-red`). If the tag is present, `main` CI is failing; fixing `main` is the only permitted work until the tag is cleared by a passing run.
 - Open a pull request into `main` when the work is pushed. You may merge that PR yourself only when every condition below holds. Otherwise leave it open for Claude Code or the operator.
   - The change is non-destructive: no file deletions, no database or schema migrations, no force-pushes, no history rewrites, and no edits to `.claude/`, `.harness/`, or `.harness-version`.
   - The quick checks passed on the PR head commit, and each command and result is recorded in `.spec/SESSION_HANDOFF.md`.
