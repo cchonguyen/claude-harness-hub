@@ -1,0 +1,28 @@
+{
+  "fast_path": {
+    "max_reads": 3,
+    "max_searches": 1,
+    "max_edits": 1,
+    "max_edit_lines": 25
+  },
+  "circuit_breaker": {
+    "max_strikes": 2,
+    "max_searches": 2,
+    "max_mutating_calls": 15
+  },
+  "line_budgets": {
+    "soft_caps": {
+      "AGENTS.md": 40,
+      "CLAUDE.md": 5,
+      ".spec/INDEX.md": 50,
+      ".spec/boundaries/locks.md": 60,
+      ".spec/boundaries/do-not-build.md": 60,
+      ".spec/contracts/referee.md": 80,
+      ".spec/contracts/circuit-breaker.md": 80,
+      ".spec/contracts/baton-pass.md": 80,
+      ".spec/contracts/review-relay.md": 80,
+      ".spec/PROGRESS.md": 60,
+      ".spec/archive/HISTORY.md": 200
+    }
+  }
+}
