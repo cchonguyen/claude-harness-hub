@@ -64,7 +64,31 @@ export function finishSlice(root, commitMsg, options = {}) {
   const activeLine = lines[activeIdx];
   const sliceIdMatch = activeLine.match(/\*\*Slice\s+([^*]+)\*\*/);
   const sliceId = sliceIdMatch ? sliceIdMatch[1].trim() : 'active';
-  const targets = parseActiveTargets(activeLine);
+
+  // Scope Neutrality (SYSTEM_SPEC 5.B): Read Target files from HEAD:.spec/PROGRESS.md to prevent
+  // workers from retroactively widening scope in the mutable working copy.
+  let headProgress = '';
+  try {
+    headProgress = execFileSync('git', ['show', 'HEAD:.spec/PROGRESS.md'], {
+      cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore']
+    });
+  } catch {}
+
+  let targets = [];
+  if (headProgress) {
+    const headLines = headProgress.split('\n');
+    const headSliceLine = headLines.find((l) =>
+      (sliceIdMatch && l.includes(sliceIdMatch[0])) ||
+      l.includes(`**Slice ${sliceId}**`) ||
+      l.includes(`**Slice ${sliceId}:`)
+    );
+    if (headSliceLine) {
+      targets = parseActiveTargets(headSliceLine);
+    }
+  }
+  if (targets.length === 0) {
+    targets = parseActiveTargets(activeLine);
+  }
 
   // 2. Enforce scope neutrality before modifying or staging files
   const statusOut = execFileSync('git', ['status', '--porcelain'], { cwd: root, encoding: 'utf8' });

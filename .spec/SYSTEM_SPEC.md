@@ -96,11 +96,12 @@ Source: Operator RFC, Antigravity adversarial review, and Claude architectural r
 1. **Neutral Arbiter (`referee.mjs`):**
    - Pure, zero-dependency Node script that evaluates repository health, scope adherence, test rules, and natural lulls. Never modifies application source code.
    - **Scope Neutrality:** Reads target files from `HEAD:.spec/PROGRESS.md` (`git show HEAD:.spec/PROGRESS.md`), not the mutable working copy, preventing workers from retroactively widening scope.
-2. **Commit Trailers:**
+2. **Commit Trailers & Audit Marker Semantics:**
    - `finish-slice.mjs` verifies the slice and commits using Git trailers:
      - `Referee-Verdict: VERIFIED`
      - `Referee-Tree: <tree-sha>` (from `git rev-parse HEAD^{tree}`)
      - `Referee-Engine: <referee-mjs-sha256>`
+   - **Audit Marker Threat Model:** The trailers function as deterministic audit markers and tree integrity fingerprints (binding `HEAD^{tree}` and `referee.mjs` SHA-256) within the repository workspace. They guard against post-verification modifications, engine mismatches, and branch skew; they are not cryptographic identity attestations or digital signatures.
 3. **Zero-Turn Baton Pickup (`baton-pickup.mjs`):**
    - On `/pickup`, if `HEAD` carries `Referee-Verdict: VERIFIED`, `git status --porcelain` is clean, and `git rev-parse HEAD^{tree}` matches `Referee-Tree`, prior work is trusted via deterministic tree integrity and engine fingerprinting without re-running checks in Claude.
 4. **Natural Lull Detection:**

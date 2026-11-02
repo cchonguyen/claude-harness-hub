@@ -28,6 +28,9 @@ export function readHeadTrailers(root) {
   return { verdict, tree, engine };
 }
 
+// Verification Semantics: Referee trailers are deterministic audit markers and tree integrity fingerprints
+// (binding HEAD^{tree} and referee.mjs SHA-256) within the repository workspace. They detect accidental drift,
+// post-verification modifications, and engine mismatches; they are not cryptographic identity attestations.
 export function verifyHeadTrust(root, scriptPath = path.join(root, '.harness', 'scripts', 'referee.mjs')) {
   const { verdict, tree, engine } = readHeadTrailers(root);
   if (verdict !== 'VERIFIED') return { trusted: false, reason: 'Referee-Verdict is missing or not VERIFIED on HEAD' };

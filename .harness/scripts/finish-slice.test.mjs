@@ -118,3 +118,38 @@ test('finishSlice throws and fails to commit when verification tests fail', () =
 
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+test('finishSlice enforces scope neutrality from HEAD to prevent working-copy target widening', () => {
+  const dir = makeRepo();
+  const git = (...args) => execFileSync('git', args, { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+
+  fs.mkdirSync(path.join(dir, '.spec'), { recursive: true });
+  fs.mkdirSync(path.join(dir, '.harness', 'scripts'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.harness', 'scripts', 'referee.mjs'), '// referee');
+  fs.writeFileSync(path.join(dir, '.spec', 'SESSION_HANDOFF.md'), '**Active Slice:** Slice 1\n');
+  fs.writeFileSync(
+    path.join(dir, '.spec', 'PROGRESS.md'),
+    '# Progress\n- [ ] **Slice 1** `[GREEN][CORE / DATA]`: Test slice — Target files: test.txt\n'
+  );
+  fs.writeFileSync(path.join(dir, 'test.txt'), 'content');
+  fs.writeFileSync(path.join(dir, 'widened.txt'), 'content');
+
+  git('add', '-A');
+  git('commit', '-m', 'init');
+
+  // Worker retroactively widens Target files in working copy of PROGRESS.md to include widened.txt
+  fs.writeFileSync(
+    path.join(dir, '.spec', 'PROGRESS.md'),
+    '# Progress\n- [ ] **Slice 1** `[GREEN][CORE / DATA]`: Test slice — Target files: test.txt, widened.txt [IN_PROGRESS]\n'
+  );
+  fs.writeFileSync(path.join(dir, 'test.txt'), 'updated');
+  fs.writeFileSync(path.join(dir, 'widened.txt'), 'unauthorized edit');
+
+  // Must reject despite working-copy PROGRESS.md claiming widened.txt is in scope
+  assert.throws(
+    () => finishSlice(dir, 'feat: attempt widened slice', { skipChecks: true }),
+    /Scope check failed: widened\.txt modified outside Target files for Slice 1/
+  );
+
+  fs.rmSync(dir, { recursive: true, force: true });
+});
