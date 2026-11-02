@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { analyze, parseDiff, parseNameStatus } from './pr-scope-check.mjs';
+import { analyze, formatJsonVerdict, parseDiff, parseNameStatus } from './pr-scope-check.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const SCRIPT = path.join(here, 'pr-scope-check.mjs');
@@ -194,6 +194,158 @@ test('strict CLI exits 1 on a deletion, advisory CLI exits 0 for the same diff',
   const advisory = run(null);
   assert.equal(advisory.status, 0);
   assert.match(advisory.stdout, /advisory/);
+
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('formatJsonVerdict returns CLEAN verdict and valid schema when no problems exist', () => {
+  const verdict = formatJsonVerdict({
+    changed: ['src/app.js'],
+    deleted: [],
+    strict: false,
+    base: 'origin/main',
+    head: 'HEAD',
+    problems: [],
+    notes: ['Vibe Mode: no slice is in progress'],
+    tripwireFired: false,
+    sliceType: 'UI / VISUAL',
+  });
+
+  assert.equal(verdict.schemaVersion, '1.0.0');
+  assert.equal(typeof verdict.timestamp, 'string');
+  assert.ok(!isNaN(Date.parse(verdict.timestamp)));
+  assert.equal(verdict.verdict, 'CLEAN');
+  assert.equal(verdict.mode, 'advisory');
+  assert.deepEqual(verdict.target, { base: 'origin/main', head: 'HEAD' });
+  assert.deepEqual(verdict.summary, {
+    changedFiles: 1,
+    deletedFiles: 0,
+    problemCount: 0,
+    tripwireFired: false,
+    noteCount: 1,
+  });
+  assert.equal(verdict.sliceType, 'UI / VISUAL');
+  assert.deepEqual(verdict.findings, []);
+  assert.deepEqual(verdict.notes, ['Vibe Mode: no slice is in progress']);
+});
+
+test('formatJsonVerdict categorizes problems, generates finding IDs, sets severities, and summarizes counts', () => {
+  const problems = [
+    'Red tripwire (schema file): src/schema.sql',
+    "Outside the slice's Target files: src/other.js",
+    '2 slices are [IN_PROGRESS]. The harness allows only one.',
+    'CORE / DATA slice needs a test file change',
+    'Yellow: 2 assertion line(s) removed from tests with no replacement.',
+    'Spoke changed an engine file, which the hub owns: .harness/hooks/x.mjs',
+    'The diff is empty. There is nothing to review.',
+  ];
+
+  // Advisory mode with tripwire fired -> severity error
+  const v1 = formatJsonVerdict({
+    changed: ['src/schema.sql', 'src/other.js'],
+    deleted: ['old.js'],
+    strict: false,
+    base: 'main',
+    head: 'feat',
+    problems,
+    notes: ['note1', 'note2'],
+    tripwireFired: true,
+    sliceType: 'CORE / DATA',
+  });
+
+  assert.equal(v1.verdict, 'NEEDS_CHANGES');
+  assert.equal(v1.mode, 'advisory');
+  assert.deepEqual(v1.summary, {
+    changedFiles: 2,
+    deletedFiles: 1,
+    problemCount: 7,
+    tripwireFired: true,
+    noteCount: 2,
+  });
+  assert.equal(v1.findings.length, 7);
+  assert.deepEqual(v1.findings.map((f) => f.id), [
+    'REV-001', 'REV-002', 'REV-003', 'REV-004', 'REV-005', 'REV-006', 'REV-007',
+  ]);
+  assert.deepEqual(v1.findings.map((f) => f.type), [
+    'tripwire', 'scope', 'scope', 'test', 'test', 'engine', 'other',
+  ]);
+  assert.ok(v1.findings.every((f) => f.severity === 'error'));
+  assert.ok(v1.findings.every((f) => f.status === 'open'));
+
+  // Advisory mode with no tripwire -> severity warning
+  const v2 = formatJsonVerdict({
+    problems: ['Outside the slice\'s Target files: src/other.js'],
+    strict: false,
+    tripwireFired: false,
+  });
+  assert.equal(v2.findings[0].severity, 'warning');
+
+  // Strict mode with no tripwire -> severity error
+  const v3 = formatJsonVerdict({
+    problems: ['Outside the slice\'s Target files: src/other.js'],
+    strict: true,
+    tripwireFired: false,
+  });
+  assert.equal(v3.findings[0].severity, 'error');
+  assert.equal(v3.mode, 'strict');
+});
+
+test('CLI --output-verdict writes valid JSON to disk while preserving text report', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'scope-verdict-'));
+  const git = (...args) => execFileSync('git', args, { cwd: dir, stdio: 'ignore' });
+  git('init', '-q', '-b', 'main');
+  git('config', 'user.email', 'test@example.com');
+  git('config', 'user.name', 'test');
+  fs.writeFileSync(path.join(dir, 'file.txt'), 'hello\n');
+  git('add', '.');
+  git('commit', '-q', '-m', 'initial');
+  git('checkout', '-q', '-b', 'feature');
+  fs.writeFileSync(path.join(dir, 'file.txt'), 'hello world\n');
+  git('add', '.');
+  git('commit', '-q', '-m', 'update');
+
+  const verdictPath = path.join(dir, '.spec', 'AUDIT_VERDICT.json');
+  const res = spawnSync(process.execPath, [SCRIPT, 'main', 'HEAD', '--output-verdict', verdictPath], {
+    cwd: dir, encoding: 'utf8',
+  });
+
+  assert.equal(res.status, 0);
+  assert.match(res.stdout, /PR SCOPE: CLEAN/);
+  assert.ok(fs.existsSync(verdictPath), 'verdict file should exist');
+
+  const parsed = JSON.parse(fs.readFileSync(verdictPath, 'utf8'));
+  assert.equal(parsed.schemaVersion, '1.0.0');
+  assert.equal(parsed.verdict, 'CLEAN');
+  assert.deepEqual(parsed.target, { base: 'main', head: 'HEAD' });
+  assert.equal(parsed.summary.changedFiles, 1);
+  assert.equal(parsed.summary.problemCount, 0);
+
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('CLI --json prints valid JSON verdict to stdout', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'scope-json-'));
+  const git = (...args) => execFileSync('git', args, { cwd: dir, stdio: 'ignore' });
+  git('init', '-q', '-b', 'main');
+  git('config', 'user.email', 'test@example.com');
+  git('config', 'user.name', 'test');
+  fs.writeFileSync(path.join(dir, 'file.txt'), 'initial\n');
+  git('add', '.');
+  git('commit', '-q', '-m', 'initial');
+  git('checkout', '-q', '-b', 'feature');
+  fs.writeFileSync(path.join(dir, 'file.txt'), 'updated\n');
+  git('add', '.');
+  git('commit', '-q', '-m', 'updated');
+
+  const res = spawnSync(process.execPath, [SCRIPT, 'main', 'HEAD', '--json'], {
+    cwd: dir, encoding: 'utf8',
+  });
+
+  assert.equal(res.status, 0);
+  const parsed = JSON.parse(res.stdout);
+  assert.equal(parsed.schemaVersion, '1.0.0');
+  assert.equal(parsed.verdict, 'CLEAN');
+  assert.equal(parsed.summary.changedFiles, 1);
 
   fs.rmSync(dir, { recursive: true, force: true });
 });
