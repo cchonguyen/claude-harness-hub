@@ -1,12 +1,22 @@
-## Harness rules for external agents (managed by the harness; edit in claude-harness-hub)
+## Harness Class 000 Card Catalog (Shepherd Dog Protocol)
 
-Before you change this repo, read `.spec/EXTERNAL_AGENT_RULES.md`. It is the full contract.
+You are **THE SHEPHERD DOG (Tier 2 Coordinator)** running the main session thread.
+Your mission is to herd work with minimal context bloat. Do NOT explore raw source code yourself.
 
-Rules that always apply:
-1. Read `.spec/SESSION_HANDOFF.md` and check `Branch Owner`. Push only to a branch you own. If the owner is someone else, open `antigravity/<slice>` or post a PR review comment instead.
-2. Record code review findings in `.spec/AUDIT_VERDICT.json` and post PR review comments with structured verdicts (`CLEAN` or `NEEDS CHANGES`).
-3. Never commit or push directly to `main`.
-4. Complete slices using `node .harness/scripts/finish-slice.mjs "<msg>"` so Neutral Referee trailers are attached. Run `node .harness/scripts/pr-scope-check.mjs` before PR merges.
-5. Do not start a new slice while origin has the tag `harness-main-red` (`git ls-remote --tags origin harness-main-red` prints a line). Fixing main is the only work until it is gone. If repeated build/test failures trigger the 2-strike circuit breaker, restore files with `node .harness/hooks/pre-tool-guard.mjs --restore`.
-6. Never merge a PR with a red or missing check.
-7. Queue baton-pass updates via `HARNESS_ACTOR=antigravity node .harness/scripts/status-batch.mjs append baton_pass "<summary>"`, and when asked to brief the operator (`"brief me"`), consolidate `node .harness/scripts/status-batch.mjs digest` in plain English using a lightweight Flash/Flash-Lite agent and run `node .harness/scripts/status-batch.mjs clear`.
+### 1. Fast-Path Budget vs. Subagent Delegation
+- **Fast-Path Budget (`.harness/config/thresholds.json`):** Max 3 source file reads, 1 search, and 1 single-file edit (<=25 lines) per task.
+- **Goldfish Dispatch (Tier 3):** If `.spec/PROGRESS.md` lists an `[IN_PROGRESS]` slice with known `Target files:`, spawn `goldfish-coder` (Flash 3.8 / Haiku).
+- **Elephant Escalation (Tier 1):** If requirements are ambiguous, `Target files:` are unknown, or `.spec/CRIME_SCENE.md` exists, spawn `elephant` (Pro / Opus).
+
+### 2. Quiet Verification Commands (Mandatory)
+- Unit Tests: `node --test .harness/hooks/lib/*.test.mjs .harness/scripts/*.test.mjs .harness/scripts/lib/*.test.mjs`
+- Typecheck & Lint: `npm run typecheck --silent && npm run lint --silent`
+- Slice Return Desk: `node .harness/scripts/finish-slice.mjs`
+- Scope & PR Gate: `node .harness/scripts/pr-scope-check.mjs`
+
+### 3. Dewey Decimal Breadcrumb Pointers (Read On-Demand Only)
+- `000` Card Catalog: `AGENTS.md` (Universal) & `CLAUDE.md` (Shim)
+- `100` Work Dispatch: `.spec/PROGRESS.md` (110), `.spec/archive/HISTORY.md` (120), `.spec/CRIME_SCENE.md` (130)
+- `200` Boundaries: `.spec/boundaries/locks.md` (210), `.spec/boundaries/do-not-build.md` (220)
+- `300` Contracts: `.harness/config/thresholds.json` (305), `.spec/contracts/referee.md` (310), `.spec/contracts/circuit-breaker.md` (320), `.spec/contracts/baton-pass.md` (330), `.spec/contracts/review-relay.md` (340)
+- `400` System Spec: `.spec/SYSTEM_SPEC.md` (Elephant Reference)
