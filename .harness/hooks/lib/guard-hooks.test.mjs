@@ -144,4 +144,40 @@ test('silent upshift to engineer-sonnet or architect-opus is blocked without ope
   assert.match(directEditAuth.stderr, /UPSHIFT LOCK VIOLATION/);
 });
 
+test('session-start resets session telemetry and post-tool-scrub tracks mutating calls', () => {
+  const dir = makeRepo({ files: { '.spec/PROGRESS.md': SLICE('src/app.js') } });
+  const START = path.join(hooksDir, 'session-start.mjs');
+  const SCRUB = path.join(hooksDir, 'post-tool-scrub.mjs');
+  
+  // 1. Session start initializes telemetry
+  const rStart = spawnSync(process.execPath, [START], {
+    cwd: dir, input: JSON.stringify({ session_id: 'test-sess' }), encoding: 'utf8',
+    env: { ...process.env, CLAUDE_PROJECT_DIR: dir },
+  });
+  assert.equal(rStart.status, 0);
+  const telemPath = path.join(dir, '.spec', '.session-telemetry.json');
+  assert.equal(fs.existsSync(telemPath), true);
+  const telem = JSON.parse(fs.readFileSync(telemPath, 'utf8'));
+  assert.equal(telem.sessionId, 'test-sess');
+  assert.equal(telem.totalToolCalls, 0);
+
+  // 2. Post tool scrub increments telemetry and mutating calls
+  const rScrub = spawnSync(process.execPath, [SCRUB], {
+    cwd: dir,
+    input: JSON.stringify({
+      session_id: 'test-sess',
+      tool_name: 'Edit',
+      tool_input: { file_path: path.join(dir, 'src/app.js') },
+      tool_response: { stdout: 'ok' }
+    }),
+    encoding: 'utf8',
+    env: { ...process.env, CLAUDE_PROJECT_DIR: dir },
+  });
+  assert.equal(rScrub.status, 0);
+  const updated = JSON.parse(fs.readFileSync(telemPath, 'utf8'));
+  assert.equal(updated.totalToolCalls, 1);
+  assert.equal(updated.mutatingCallsOnSlice, 1);
+  assert.equal(updated.currentSlice, '3.3');
+});
+
 after(() => { for (const dir of dirs) fs.rmSync(dir, { recursive: true, force: true }); });
