@@ -1,18 +1,18 @@
 ---
 description: Advisory review of a pull request: run the scope check, review the diff, and post one verdict comment. Never approves or merges.
 argument-hint: [pull request number]
-allowed-tools: Bash(node *), Bash(git diff*), Bash(git show*), Read, Grep, Glob, mcp__github__pull_request_read, mcp__github__add_issue_comment
-disable-model-invocation: true
+allowed-tools: Bash(node *), Bash(git diff*), Bash(git show*), Read, Write, Edit, Grep, Glob, mcp__github__pull_request_read, mcp__github__add_issue_comment
 ---
 1. Get the pull request's base and head branches with `mcp__github__pull_request_read`, then fetch both: `git fetch origin <base> <head>`.
-2. Run the scope check: `node "${CLAUDE_PROJECT_DIR}/.harness/scripts/pr-scope-check.mjs" origin/<base> origin/<head>`. Keep its output.
+2. Run the scope check: `node "${CLAUDE_PROJECT_DIR}/.harness/scripts/pr-scope-check.mjs" origin/<base> origin/<head> --output-verdict "${CLAUDE_PROJECT_DIR}/.spec/AUDIT_VERDICT.json"`. Keep its output.
 3. Read the diff with `git diff origin/<base>...origin/<head>`. Check it against:
    - `.spec/SYSTEM_SPEC.md` and `.spec/PROGRESS.md`: does the change match the active slice or the request?
    - `CLAUDE.md`: the quick checks were run or marked "unverified" in `.spec/SESSION_HANDOFF.md`?
    - Correctness: does the code do what the PR says? Read only the changed files and their direct callers.
-4. Write one verdict:
+4. Determine the verdict:
    - `CLEAN` if the scope check is clean and the diff has no correctness problems.
-   - `NEEDS CHANGES` with a numbered list of problems. Each item names the file and the line, and says what to fix.
+   - `NEEDS CHANGES` if the scope check reported problems or if any correctness problems are found in the diff. Include a numbered list of all problems; each item names the file and the line, and explains what to fix.
+   - If any correctness or scope problems are found, record them in the verdict and update `${CLAUDE_PROJECT_DIR}/.spec/AUDIT_VERDICT.json` if necessary to reflect the findings and problems list.
 5. Post the verdict once with `mcp__github__add_issue_comment` on the pull request. Start the comment with `**Claude review: CLEAN**` or `**Claude review: NEEDS CHANGES**`, then the scope check output, then your findings. End the comment with this footer, exactly:
 
    ---

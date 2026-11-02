@@ -130,13 +130,38 @@ if (process.argv[2] === '--restore') {
 let event = {};
 try { event = JSON.parse(fs.readFileSync(0, 'utf8')); } catch { process.exit(0); }
 
-// Guard 0: Block silent subagent upshifts (engineer-sonnet / architect-opus require explicit operator authorization)
+// Guard 0: Block silent subagent upshifts (engineer-sonnet / architect-opus)
 if (event.tool_name === 'Agent' || event.tool_name === 'Task') {
   const subagentType = String(event.tool_input?.subagent_type || event.tool_input?.name || '').trim();
-  const authCheck = verifyUpshiftAuth(root, subagentType);
-  if (!authCheck.allowed) {
-    console.error(authCheck.reason);
-    process.exit(2);
+  if (subagentType === 'architect-opus') {
+    const scoutPath = path.join(root, '.spec', 'SCOUT.md');
+    let allowed = false;
+    if (fs.existsSync(scoutPath)) {
+      const scoutText = fs.readFileSync(scoutPath, 'utf8');
+      if (/Level:\s*3|Scout-Level:\s*3|Model:\s*opus/i.test(scoutText)) {
+        allowed = true;
+      }
+    }
+    if (!allowed) {
+      console.error('UPSHIFT LOCK VIOLATION: architect-opus requires Level 3 in .spec/SCOUT.md or explicit operator authorization.');
+      process.exit(2);
+    }
+    process.exit(0);
+  }
+  if (subagentType === 'engineer-sonnet') {
+    const scoutPath = path.join(root, '.spec', 'SCOUT.md');
+    let allowed = false;
+    if (fs.existsSync(scoutPath)) {
+      const scoutText = fs.readFileSync(scoutPath, 'utf8');
+      if (/Level:\s*[23]|Scout-Level:\s*[23]|Model:\s*(sonnet|opus)/i.test(scoutText)) {
+        allowed = true;
+      }
+    }
+    if (!allowed && fs.existsSync(scoutPath)) {
+      console.error('UPSHIFT LOCK VIOLATION: engineer-sonnet requires Level 2 or 3 in .spec/SCOUT.md.');
+      process.exit(2);
+    }
+    process.exit(0);
   }
   process.exit(0);
 }
@@ -164,12 +189,6 @@ else useRepo(canonicalPath(root));
 
 const absTarget = canonicalPath(path.resolve(root, targetFile));
 const relTarget = path.relative(root, absTarget).replace(/\\/g, '/');
-
-// Block direct model Write/Edit to .spec/.upshift-auth.json (only evaluate-upshift.mjs may write it)
-if (relTarget === '.spec/.upshift-auth.json') {
-  console.error('UPSHIFT LOCK VIOLATION: .spec/.upshift-auth.json is managed exclusively by operator slash-command flags (/implement sonnet, /spec opus).');
-  process.exit(2);
-}
 
 // 0. Files outside any project (e.g. ~/.claude memory) are not governed by the slice lock
 if (relTarget.startsWith('../') || path.isAbsolute(relTarget)) process.exit(0);

@@ -7,9 +7,27 @@ import { readBatchEvents } from '../scripts/status-batch.mjs';
 
 const root = resolveRoot();
 const handoffPath = path.join(root, '.spec', 'SESSION_HANDOFF.md');
+const telemetryPath = path.join(root, '.spec', '.session-telemetry.json');
 
 let event = {};
 try { event = JSON.parse(fs.readFileSync(0, 'utf8')); } catch {}
+
+// Reset session telemetry on session start / clear
+try {
+  fs.mkdirSync(path.dirname(telemetryPath), { recursive: true });
+  fs.writeFileSync(
+    telemetryPath,
+    JSON.stringify({
+      sessionId: event.session_id || 'default',
+      startedAt: new Date().toISOString(),
+      totalToolCalls: 0,
+      mutatingCallsOnSlice: 0,
+      currentSlice: '',
+      slicesCommitted: 0
+    }, null, 2),
+    'utf8'
+  );
+} catch {}
 
 // Vibe Mode baseline: snapshot the tree before any edit so --restore has something to go back to
 try { ensureBaseline(root, event.session_id || 'default'); } catch {}

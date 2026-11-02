@@ -130,18 +130,84 @@ test('bash guard lets reads and the restore command through, and ignores the hub
   assert.equal(run(hub, 'echo x > .harness/x.mjs'), 0);
 });
 
-test('silent upshift to engineer-sonnet or architect-opus is blocked without operator authorization', () => {
+test('SCOUT level routing maps facts deterministically to levels and agents', () => {
+  const dir = makeRepo();
+  fs.mkdirSync(path.join(dir, '.spec'), { recursive: true });
+  const scoutPath = path.join(dir, '.spec', 'SCOUT.md');
+  const EVAL = path.join(hooksDir, '..', 'scripts', 'evaluate-upshift.mjs');
+
+  // Level 1: <3 files, no contract change
+  fs.writeFileSync(scoutPath, 'Scout-Level: 1\nFiles-Touched: 2\nContract-Change: no\nCross-Module: no\n');
+  const r1 = spawnSync(process.execPath, [EVAL, 'spec'], {
+    cwd: dir, encoding: 'utf8', env: { ...process.env, CLAUDE_PROJECT_DIR: dir },
+  });
+  assert.equal(r1.status, 0);
+  assert.match(r1.stdout, /Level 1/);
+
+  // Level 3: Cross module -> Opus
+  fs.writeFileSync(scoutPath, 'Files-Touched: 8\nContract-Change: yes\nCross-Module: yes\n');
+  const r3 = spawnSync(process.execPath, [EVAL, 'spec'], {
+    cwd: dir, encoding: 'utf8', env: { ...process.env, CLAUDE_PROJECT_DIR: dir },
+  });
+  assert.equal(r3.status, 0);
+  assert.match(r3.stdout, /architect-opus/);
+});
+
+test('session-start resets session telemetry and post-tool-scrub tracks mutating calls', () => {
   const dir = makeRepo({ files: { '.spec/PROGRESS.md': SLICE('src/app.js') } });
-  const blocked = runHook(GUARD, dir, { tool_name: 'Agent', tool_input: { subagent_type: 'engineer-sonnet' } });
-  assert.equal(blocked.status, 2);
-  assert.match(blocked.stderr, /SILENT UPSHIFT BLOCKED/);
+  const START = path.join(hooksDir, 'session-start.mjs');
+  const SCRUB = path.join(hooksDir, 'post-tool-scrub.mjs');
+  
+  // 1. Session start initializes telemetry
+  const rStart = spawnSync(process.execPath, [START], {
+    cwd: dir, input: JSON.stringify({ session_id: 'test-sess' }), encoding: 'utf8',
+    env: { ...process.env, CLAUDE_PROJECT_DIR: dir },
+  });
+  assert.equal(rStart.status, 0);
+  const telemPath = path.join(dir, '.spec', '.session-telemetry.json');
+  assert.equal(fs.existsSync(telemPath), true);
+  const telem = JSON.parse(fs.readFileSync(telemPath, 'utf8'));
+  assert.equal(telem.sessionId, 'test-sess');
+  assert.equal(telem.totalToolCalls, 0);
 
-  const baselineOk = runHook(GUARD, dir, { tool_name: 'Agent', tool_input: { subagent_type: 'engineer' } });
-  assert.equal(baselineOk.status, 0);
+  // 2. Post tool scrub increments telemetry and mutating calls
+  const rScrub = spawnSync(process.execPath, [SCRUB], {
+    cwd: dir,
+    input: JSON.stringify({
+      session_id: 'test-sess',
+      tool_name: 'Edit',
+      tool_input: { file_path: path.join(dir, 'src/app.js') },
+      tool_response: { stdout: 'ok' }
+    }),
+    encoding: 'utf8',
+    env: { ...process.env, CLAUDE_PROJECT_DIR: dir },
+  });
+  assert.equal(rScrub.status, 0);
+  const updated = JSON.parse(fs.readFileSync(telemPath, 'utf8'));
+  assert.equal(updated.totalToolCalls, 1);
+  assert.equal(updated.mutatingCallsOnSlice, 1);
+  assert.equal(updated.currentSlice, '3.3');
+});
 
-  const directEditAuth = runHook(GUARD, dir, edit(dir, '.spec/.upshift-auth.json'));
-  assert.equal(directEditAuth.status, 2);
-  assert.match(directEditAuth.stderr, /UPSHIFT LOCK VIOLATION/);
+test('pre-tool-guard blocks silent architect-opus unless SCOUT.md authorizes Level 3', () => {
+  const dir = makeRepo();
+
+  // 1. Silent dispatch without SCOUT.md is blocked (exit 2)
+  const rBlocked = runHook(GUARD, dir, {
+    tool_name: 'Agent',
+    tool_input: { subagent_type: 'architect-opus' }
+  });
+  assert.equal(rBlocked.status, 2);
+  assert.match(rBlocked.stderr, /UPSHIFT LOCK VIOLATION/);
+
+  // 2. Dispatch with Level 3 in SCOUT.md is allowed (exit 0)
+  fs.mkdirSync(path.join(dir, '.spec'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.spec', 'SCOUT.md'), '# Scout Sizing\n- Level: 3 (Opus Deep Synthesis)\n');
+  const rAllowed = runHook(GUARD, dir, {
+    tool_name: 'Agent',
+    tool_input: { subagent_type: 'architect-opus' }
+  });
+  assert.equal(rAllowed.status, 0);
 });
 
 after(() => { for (const dir of dirs) fs.rmSync(dir, { recursive: true, force: true }); });

@@ -53,7 +53,7 @@ Source: Claude review of the v3.0 RFC, operator decisions, and the Antigravity a
 5. **Test rule (replaces the fail-before/pass-after check).**
    - `[UI / VISUAL]`: typecheck, lint, and `pr-scope-check.mjs` must pass; no unit test required.
    - `[CORE / DATA]`: `pr-scope-check.mjs` verifies that (a) at least one test file (`*.test.*`, `*.spec.*`, `test_*.py`, `*_test.py`, `*_test.go`) changed, (b) the diff adds or modifies assertion lines (`expect(`, `assert`, `should`, `toBe`, `toEqual`, `raises`, `t.Error`, `t.Fatal`), (c) no existing assertion line was removed without a replacement (otherwise Yellow), and (d) the test runner exits 0. This proves tests exist and run, not that they test the right thing; the code-review pass judges assertion quality and flags always-true assertions.
-6. **Relay.** Antigravity posts its verdict as a PR review comment. `SESSION_HANDOFF.md` gains `Branch Owner: claude | antigravity`; only the owner pushes to that branch, and the other side opens `antigravity/<slice>` or comments instead. Baseline: `session-start.mjs`, `/implement`, and `/ingest-feedback` surface the latest handoff and PR review state when a session starts or resumes. A Claude session subscribed to the PR may also wake on the comment, but nothing depends on that. `AUDIT_VERDICT.md` is not created; the clipboard `HANDOFF_PACKET.md` flow stays as a fallback.
+6. **Relay.** Structured cross-agent relay: Antigravity/Gemini posts verdicts as PR review comments and writes `.spec/AUDIT_VERDICT.json`. Claude's `/ingest-feedback` or `/pickup` can ingest directly from `.spec/AUDIT_VERDICT.json` or PR review comments. `SESSION_HANDOFF.md` gains `Branch Owner: claude | antigravity` and an optional `- **Audit Status:** [CLEAN | NEEDS_CHANGES | AUDIT_PENDING | none]`; only the owner pushes to that branch, and the other side opens `antigravity/<slice>` or comments instead. Baseline: `session-start.mjs`, `/implement`, `/pickup`, and `/ingest-feedback` surface the latest handoff and PR review state when a session starts or resumes. A Claude session subscribed to the PR may also wake on the comment, but nothing depends on that. `AUDIT_VERDICT.md` is not created (structured `.spec/AUDIT_VERDICT.json` is used instead); the clipboard `HANDOFF_PACKET.md` flow stays as a fallback.
 7. **Yellow:** at most one self-remediation attempt, then restore to the 4.A.4 anchor and post a decision card.
 
 ### 4.D Learning loop
@@ -74,3 +74,41 @@ Source: Claude review of the v3.0 RFC, operator decisions, and the Antigravity a
 - `/learn` push is unchanged: fresh `claude/learn-*` branch off `origin/main` in the sibling hub checkout, then a PR.
 - `bundle-handoff.mjs` drops lockfiles from the diff and adds a one-line "lockfile changed" note.
 - `runner-matcher.mjs` adds `go test`, `cargo (test|build)`, `python -m (pytest|unittest)`, `make (test|check)`; `.spec/harness.json` may list extra spoke check commands under `"checks"`.
+
+## 5. Harness v3.2 "Autonomous Referee & Turn-Collapsing Engine" Contract
+Source: Operator RFC, Antigravity adversarial review, and Claude architectural review (ADR-010).
+
+### 5.A Cognitive Separation: Elephant vs. Goldfish
+1. **The Elephant (Planning, Architecture, Spec Finalization):**
+   - Active during discovery, architecture design, major refactoring, and locking `.spec/` documentation (`SYSTEM_SPEC.md`, `DECISIONS.md`, `OVERVIEW.md`, `PROGRESS.md`).
+   - Uses `architect` (Sonnet) by default, and `architect-opus` (Opus) when deep architectural synthesis is needed.
+   - Entry flow: `/triage` acts as a factual Scout writing `.spec/SCOUT.md` (`Files-Touched`, `Contract-Change`, `Cross-Module`). `evaluate-upshift.mjs` maps these fields via a deterministic table to Scout-Level (1: Goldfish `/quick-fix`, 2: Sonnet `architect`, 3: Opus `architect-opus`). Opus is dispatched only when `SCOUT.md` is Level 3 or explicit `/spec opus` was passed.
+   - Goal: Leave behind self-contained contracts and atomic (`<5` target files), risk-tagged slices in `.spec/PROGRESS.md` so implementation requires zero long-horizon memory.
+2. **The Goldfish (Stateless Implementation & Review):**
+   - Handles all day-to-day slice implementation, unit testing, PR scope reviews, and debugging.
+   - Runs on Haiku baseline (`engineer`, `auditor`, `clerk`), Gemini Flash/Pro in Antigravity/AI Studio, or Sonnet (`engineer-sonnet`) when escalated.
+   - **Hard Rule: Opus is never used for Goldfish work.**
+3. **Dispatch Sizing & Mechanical Guard:**
+   - Guard 0 in `pre-tool-guard.mjs` mechanically verifies subagent dispatch against `.spec/SCOUT.md`: `architect-opus` is blocked unless `SCOUT.md` specifies Level 3, and `engineer-sonnet` is blocked unless `SCOUT.md` specifies Level 2 or 3.
+   - Agents announce dispatch on Line 1: `🐘 Dispatching Elephant subagent (<name>)...` or `🐠 Dispatching Goldfish subagent (<name>)...`.
+
+### 5.B Neutral Referee & Verification Trailers
+1. **Neutral Arbiter (`referee.mjs`):**
+   - Pure, zero-dependency Node script that evaluates repository health, scope adherence, test rules, and natural lulls. Never modifies application source code.
+   - **Scope Neutrality:** Reads target files from `HEAD:.spec/PROGRESS.md` (`git show HEAD:.spec/PROGRESS.md`), not the mutable working copy, preventing workers from retroactively widening scope.
+2. **Commit Trailers & Audit Marker Semantics:**
+   - `finish-slice.mjs` verifies the slice and commits using Git trailers:
+     - `Referee-Verdict: VERIFIED`
+     - `Referee-Tree: <tree-sha>` (from `git rev-parse HEAD^{tree}`)
+     - `Referee-Engine: <referee-mjs-sha256>`
+   - **Audit Marker Threat Model:** The trailers function as deterministic audit markers and tree integrity fingerprints (binding `HEAD^{tree}` and `referee.mjs` SHA-256) within the repository workspace. They guard against post-verification modifications, engine mismatches, and branch skew; they are not cryptographic identity attestations or digital signatures.
+3. **Zero-Turn Baton Pickup (`baton-pickup.mjs`):**
+   - On `/pickup`, if `HEAD` carries `Referee-Verdict: VERIFIED`, `git status --porcelain` is clean, and `git rev-parse HEAD^{tree}` matches `Referee-Tree`, prior work is trusted via deterministic tree integrity and engine fingerprinting without re-running checks in Claude.
+4. **Natural Lull Detection:**
+   - Detected deterministically in `referee.mjs` at clean slice commit boundaries without LLM tokens:
+     - Cumulative session tool calls `>= 40` or committed slices `>= 3`.
+     - Upcoming slice is `[RED]`, or transitions between `[GREEN]` and `[YELLOW]` or `[CORE / DATA]` and `[UI / VISUAL]`.
+     - Milestone heading complete in `PROGRESS.md`.
+     - Immediately after a 2-strike restore.
+   - Halts `/implement` auto-chaining cleanly.
+   - Mid-slice backstop in `post-tool-scrub.mjs`: emits a 1-line soft advisory nudge when mutating tool calls (`Edit`/`Write`/`Bash`) on the active slice reach 15.
