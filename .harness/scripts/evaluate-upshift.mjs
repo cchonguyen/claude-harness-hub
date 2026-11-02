@@ -6,11 +6,46 @@ import { appendBatchEvent, resolveRoot } from './status-batch.mjs';
 const root = resolveRoot();
 const progressPath = path.join(root, '.spec', 'PROGRESS.md');
 const specPath = path.join(root, '.spec', 'SYSTEM_SPEC.md');
+const scoutPath = path.join(root, '.spec', 'SCOUT.md');
 const strikePath = path.join(root, '.spec', '.strike-counter.json');
-const authPath = path.join(root, '.spec', '.upshift-auth.json');
 
 const mode = (process.argv[2] || 'implement').toLowerCase(); // 'implement' | 'spec'
 const rawArg = (process.argv[3] || '').trim().toLowerCase();
+
+export const parseScout = (filePath) => {
+  if (!fs.existsSync(filePath)) return null;
+  const content = fs.readFileSync(filePath, 'utf8');
+  const levelMatch = content.match(/Scout-Level:\s*(\d+)/i);
+  const filesMatch = content.match(/Files-Touched:\s*(\d+)/i);
+  const contractMatch = content.match(/Contract-Change:\s*(yes|no)/i);
+  const crossMatch = content.match(/Cross-Module:\s*(yes|no)/i);
+
+  const filesTouched = filesMatch ? parseInt(filesMatch[1], 10) : 0;
+  const contractChange = contractMatch ? contractMatch[1].toLowerCase() === 'yes' : false;
+  const crossModule = crossMatch ? crossMatch[1].toLowerCase() === 'yes' : false;
+
+  let computedLevel = 1;
+  if (crossModule || (contractChange && filesTouched >= 5)) {
+    computedLevel = 3;
+  } else if (contractChange || filesTouched >= 3) {
+    computedLevel = 2;
+  }
+
+  const explicitLevel = levelMatch ? parseInt(levelMatch[1], 10) : computedLevel;
+  return {
+    level: explicitLevel,
+    filesTouched,
+    contractChange,
+    crossModule
+  };
+};
+
+export const levelFor = (scoutData) => {
+  if (!scoutData) return { level: 2, agent: 'architect', tier: 'sonnet' };
+  if (scoutData.level === 3) return { level: 3, agent: 'architect-opus', tier: 'opus' };
+  if (scoutData.level === 1) return { level: 1, agent: 'engineer', tier: 'haiku' };
+  return { level: 2, agent: 'architect', tier: 'sonnet' };
+};
 
 const parseTargets = (line) => {
   const match = line?.match(/Target files:\s*(.+)$/i);
@@ -18,47 +53,9 @@ const parseTargets = (line) => {
   return match[1].replace(/[`*]/g, '').split(',').map((s) => s.trim().replace(/^\.\//, '')).filter(Boolean);
 };
 
-const writeAuth = (tier, subagent, slice) => {
-  fs.mkdirSync(path.dirname(authPath), { recursive: true });
-  fs.writeFileSync(
-    authPath,
-    JSON.stringify({ tier, subagent, slice, authorizedAt: new Date().toISOString() }, null, 2),
-    'utf8'
-  );
-};
-
-export const clearUpshiftAuth = (projectRoot = root) => {
-  const p = path.join(projectRoot, '.spec', '.upshift-auth.json');
-  if (fs.existsSync(p)) {
-    try { fs.unlinkSync(p); } catch {}
-  }
-};
-
-export const verifyUpshiftAuth = (projectRoot, requestedAgent) => {
-  const gated = {
-    'engineer-sonnet': 'sonnet',
-    'architect-opus': 'opus'
-  };
-  const requiredTier = gated[requestedAgent];
-  if (!requiredTier) return { allowed: true };
-  const p = path.join(projectRoot, '.spec', '.upshift-auth.json');
-  if (!fs.existsSync(p)) {
-    return {
-      allowed: false,
-      reason: `SILENT UPSHIFT BLOCKED: Subagent "${requestedAgent}" (${requiredTier}) requires explicit operator approval. Run "/implement sonnet" or "/spec opus" to authorize.`
-    };
-  }
-  try {
-    const data = JSON.parse(fs.readFileSync(p, 'utf8'));
-    if (data.subagent === requestedAgent || data.tier === requiredTier) {
-      return { allowed: true };
-    }
-  } catch {}
-  return {
-    allowed: false,
-    reason: `SILENT UPSHIFT BLOCKED: Authorization in .spec/.upshift-auth.json does not match "${requestedAgent}".`
-  };
-};
+// Deprecated no-ops for backwards compatibility with tests / hooks
+export const clearUpshiftAuth = () => {};
+export const verifyUpshiftAuth = () => ({ allowed: true });
 
 if (process.argv[1] && path.resolve(process.argv[1]).endsWith('evaluate-upshift.mjs')) {
   const progressLines = fs.existsSync(progressPath) ? fs.readFileSync(progressPath, 'utf8').split('\n') : [];
@@ -69,103 +66,36 @@ if (process.argv[1] && path.resolve(process.argv[1]).endsWith('evaluate-upshift.
   const sliceMatch = activeOrNextLine.match(/\*\*Slice\s+([^*]+)\*\*/);
   const sliceLabel = sliceMatch ? `Slice ${sliceMatch[1].trim()}` : 'next slice';
 
-  // 1. Check if operator passed an explicit tier override argument (e.g. `/implement haiku`, `/implement sonnet`, `/spec opus`)
-  if (mode === 'implement' && (rawArg === 'haiku' || rawArg === 'sonnet')) {
-    const subagent = rawArg === 'sonnet' ? 'engineer-sonnet' : 'engineer';
+  // 1. Explicit CLI flag override
+  if (mode === 'implement') {
     if (rawArg === 'sonnet') {
-      writeAuth('sonnet', 'engineer-sonnet', sliceLabel);
-      appendBatchEvent(root, {
-        actor: 'operator',
-        event: 'upshift_authorized',
-        slice: sliceLabel,
-        summary: `Operator authorized Sonnet upshift (engineer-sonnet) for ${sliceLabel}`
-      });
-    } else {
-      clearUpshiftAuth(root);
+      console.log(`🐘 Dispatching Goldfish escalated subagent (engineer-sonnet / Sonnet) for ${sliceLabel}.`);
+      process.exit(0);
     }
-    console.log(`✓ AUTHORIZED_TIER: ${rawArg} -> Proceed immediately using the "${subagent}" subagent for ${sliceLabel}.`);
+    console.log(`🐠 Dispatching Goldfish subagent (engineer / Haiku) for ${sliceLabel}.`);
     process.exit(0);
   }
 
-  if (mode === 'spec' && (rawArg === 'sonnet' || rawArg === 'opus')) {
-    const subagent = rawArg === 'opus' ? 'architect-opus' : 'architect';
+  if (mode === 'spec') {
     if (rawArg === 'opus') {
-      writeAuth('opus', 'architect-opus', sliceLabel);
-      appendBatchEvent(root, {
-        actor: 'operator',
-        event: 'upshift_authorized',
-        slice: sliceLabel,
-        summary: 'Operator authorized Opus upshift (architect-opus) for /spec'
-      });
+      console.log(`🐘 Dispatching Elephant subagent (architect-opus / Opus) for /spec.`);
+      process.exit(0);
+    }
+    if (rawArg === 'sonnet') {
+      console.log(`🐘 Dispatching Elephant subagent (architect / Sonnet) for /spec.`);
+      process.exit(0);
+    }
+
+    // Read SCOUT.md if present
+    const scout = parseScout(scoutPath);
+    const routed = levelFor(scout);
+    if (routed.level === 3) {
+      console.log(`🐘 SCOUT Level 3 detected -> Dispatching Elephant subagent (architect-opus / Opus).`);
+    } else if (routed.level === 1) {
+      console.log(`🐠 SCOUT Level 1 detected -> Recommend Goldfish direct execution (/quick-fix or /implement).`);
     } else {
-      clearUpshiftAuth(root);
+      console.log(`🐘 SCOUT Level 2 detected -> Dispatching Elephant subagent (architect / Sonnet).`);
     }
-    console.log(`✓ AUTHORIZED_TIER: ${rawArg} -> Proceed immediately using the "${subagent}" subagent.`);
     process.exit(0);
   }
-
-  // 2. Conservative Threshold Evaluation ("Silent When Green")
-  const reasons = [];
-
-  // Signal A: Target file blast radius >= 5 files on the target slice
-  const targets = parseTargets(activeOrNextLine);
-  if (targets.length >= 5) {
-    reasons.push(`High file blast radius (${targets.length} target files/paths >= 5 threshold: ${targets.join(', ')})`);
-  }
-
-  // Signal B: Unresolved spec blockers or missing SYSTEM_SPEC.md
-  if (!fs.existsSync(specPath)) {
-    reasons.push('.spec/SYSTEM_SPEC.md is missing');
-  } else {
-    const specText = fs.readFileSync(specPath, 'utf8');
-    const hasOpenBlocker = /blocking questions\s*:\s*(?!none\b|_none_|\s*$).+/i.test(specText) || /\bTODO:\s*BLOCKER\b/i.test(specText);
-    if (hasOpenBlocker) {
-      reasons.push('Unresolved Blocking Questions detected in .spec/SYSTEM_SPEC.md');
-    }
-  }
-
-  // Signal C: 2-Strike Circuit Breaker active
-  if (fs.existsSync(strikePath)) {
-    try {
-      const strikesObj = JSON.parse(fs.readFileSync(strikePath, 'utf8'));
-      const maxStrikes = Math.max(0, ...Object.values(strikesObj).map((s) => Number(s?.strikes || 0)));
-      if (maxStrikes >= 2) {
-        reasons.push(`2-Strike Circuit Breaker is active (${maxStrikes} consecutive test/build failures)`);
-      }
-    } catch {}
-  }
-
-  const baselineTier = mode === 'spec' ? 'sonnet' : 'haiku';
-  const baselineAgent = mode === 'spec' ? 'architect' : 'engineer';
-  const upshiftCmd = mode === 'spec' ? '/spec opus' : '/implement sonnet';
-  const forceBaselineCmd = mode === 'spec' ? '/spec sonnet' : '/implement haiku';
-  const auditCmd = mode === 'spec' ? '/prep-audit spec' : '/prep-audit diff';
-
-  if (reasons.length === 0) {
-    // Silent When Green: single-line green light, zero friction
-    clearUpshiftAuth(root);
-    console.log(`✓ TIER_OK (${baselineTier}): Below upshift threshold. Proceed immediately with the "${baselineAgent}" subagent.`);
-    process.exit(0);
-  }
-
-  // Threshold crossed: log advisory to batch and instruct Claude to PAUSE and ask the operator
-  appendBatchEvent(root, {
-    actor: 'evaluator',
-    event: 'upshift_advisory',
-    slice: sliceLabel,
-    summary: `Complexity threshold reached before /${mode}`,
-    details: reasons.join('; ')
-  });
-
-  console.log([
-    `⚠ UPSHIFT_THRESHOLD_REACHED (${sliceLabel}): STOP. Do NOT spawn any subagent yet.`,
-    `Reasons: ${reasons.join(' | ')}`,
-    `Output ONLY the following "Needed from you:" block so the operator can choose the execution tier:`,
-    `---`,
-    `Needed from you (Complexity Threshold Reached on ${sliceLabel}):`,
-    `- Trigger: ${reasons.join('; ')}`,
-    `1. **Option A — Free Gemini / Antigravity Review (0% Claude Quota):** Run \`${auditCmd}\` (or switch to Antigravity) to resolve the complexity/blocker at zero Claude cost.`,
-    `2. **Option B — Stay on Baseline (${baselineTier.toUpperCase()}):** Run \`${forceBaselineCmd}\` to execute with \`${baselineAgent}\` anyway.`,
-    `3. **Option C — Authorize Upshift:** Run \`${upshiftCmd}\` to unlock the higher model tier for this step.`
-  ].join('\n'));
 }

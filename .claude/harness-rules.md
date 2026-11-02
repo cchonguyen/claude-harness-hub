@@ -10,11 +10,11 @@
   Needed from you:
   1. [Exact step-by-step action or decision required]
 
-## Model Tiering & Anti-Silent-Upshift Rules
-- **Baseline Haiku Default:** Main session orchestration (`settings.json`), all direct implementation of clearly spec'd slices (`engineer`), `discovery`, `auditor`, and handoff housekeeping (`clerk`) run on **Haiku**.
-- **Standard Sonnet Architecture & 1st Upshift:** Standard `/spec` uses `architect` (**Sonnet**). Implementation upshifts to `engineer-sonnet` (**Sonnet**) ONLY when the operator explicitly runs `/implement sonnet`.
-- **Opus Strictly Operator-Locked:** `architect-opus` (**Opus**) is used ONLY when the operator explicitly runs `/spec opus` for complex multi-system orchestration or architectural deadlocks. Never silently upshift models or edit `.spec/.upshift-auth.json`.
-- **Conservative Upshift Gate ("Silent When Green"):** `evaluate-upshift.mjs` runs automatically before `/implement` and `/spec`. It stays silent below threshold and pauses for operator confirmation ONLY when `>=5` target files are listed, spec blockers exist, or the 2-Strike Circuit Breaker is active.
+## Model Tiering & Cognitive Modes (Elephant vs. Goldfish)
+- **The Elephant (Planning & Spec Finalization):** Standard `/spec` uses `architect` (**Sonnet**). Complex multi-system planning or spec finalization uses `architect-opus` (**Opus**) based on factual `.spec/SCOUT.md` Level 3 assessment or explicit `/spec opus`. Always announce dispatch: `🐘 Dispatching Elephant subagent (<name>)...`.
+- **The Goldfish (Implementation & Verification):** Main session orchestration (`settings.json`), all direct implementation of clearly spec'd slices (`engineer`), `discovery`, `auditor`, and handoff housekeeping (`clerk`) run on **Haiku**. Escalates to `engineer-sonnet` (**Sonnet**) when explicitly requested via `/implement sonnet`.
+- **Opus Strictly Forbidden for Goldfish:** Opus is never dispatched for slice coding, unit testing, PR reviews, or debugging.
+- **Factual Scout Routing:** `/triage` writes factual metrics to `.spec/SCOUT.md`. `evaluate-upshift.mjs` maps these deterministically to level and agent with zero bureaucratic auth tokens.
 
 ## Work Modes (read from `.spec/PROGRESS.md`)
 - **Vibe Mode (no `[IN_PROGRESS]` slice, or no `.spec/PROGRESS.md`):** Edit the requested files directly. Do NOT require `/triage` or `/spec` first. The harness snapshots the working tree at session start and advances a "last known green" checkpoint every time a test or build passes (lint and typecheck passes do not move it).

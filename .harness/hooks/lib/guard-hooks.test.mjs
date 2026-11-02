@@ -130,18 +130,27 @@ test('bash guard lets reads and the restore command through, and ignores the hub
   assert.equal(run(hub, 'echo x > .harness/x.mjs'), 0);
 });
 
-test('silent upshift to engineer-sonnet or architect-opus is blocked without operator authorization', () => {
-  const dir = makeRepo({ files: { '.spec/PROGRESS.md': SLICE('src/app.js') } });
-  const blocked = runHook(GUARD, dir, { tool_name: 'Agent', tool_input: { subagent_type: 'engineer-sonnet' } });
-  assert.equal(blocked.status, 2);
-  assert.match(blocked.stderr, /SILENT UPSHIFT BLOCKED/);
+test('SCOUT level routing maps facts deterministically to levels and agents', () => {
+  const dir = makeRepo();
+  fs.mkdirSync(path.join(dir, '.spec'), { recursive: true });
+  const scoutPath = path.join(dir, '.spec', 'SCOUT.md');
+  const EVAL = path.join(hooksDir, '..', 'scripts', 'evaluate-upshift.mjs');
 
-  const baselineOk = runHook(GUARD, dir, { tool_name: 'Agent', tool_input: { subagent_type: 'engineer' } });
-  assert.equal(baselineOk.status, 0);
+  // Level 1: <3 files, no contract change
+  fs.writeFileSync(scoutPath, 'Scout-Level: 1\nFiles-Touched: 2\nContract-Change: no\nCross-Module: no\n');
+  const r1 = spawnSync(process.execPath, [EVAL, 'spec'], {
+    cwd: dir, encoding: 'utf8', env: { ...process.env, CLAUDE_PROJECT_DIR: dir },
+  });
+  assert.equal(r1.status, 0);
+  assert.match(r1.stdout, /Level 1/);
 
-  const directEditAuth = runHook(GUARD, dir, edit(dir, '.spec/.upshift-auth.json'));
-  assert.equal(directEditAuth.status, 2);
-  assert.match(directEditAuth.stderr, /UPSHIFT LOCK VIOLATION/);
+  // Level 3: Cross module -> Opus
+  fs.writeFileSync(scoutPath, 'Files-Touched: 8\nContract-Change: yes\nCross-Module: yes\n');
+  const r3 = spawnSync(process.execPath, [EVAL, 'spec'], {
+    cwd: dir, encoding: 'utf8', env: { ...process.env, CLAUDE_PROJECT_DIR: dir },
+  });
+  assert.equal(r3.status, 0);
+  assert.match(r3.stdout, /architect-opus/);
 });
 
 test('session-start resets session telemetry and post-tool-scrub tracks mutating calls', () => {
