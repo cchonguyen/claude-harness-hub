@@ -9,3 +9,4 @@ Shared template for Claude Code, Google Antigravity, and Google AI Studio. Every
 - **Immediate Next Step for Claude:** Run `/clear` then `/pickup`. Prior work carries valid Neutral Referee verification trailers.
 - **Active Slice:** none
 - **Branch Owner:** antigravity
+- **Audit Status:** [CLEAN | NEEDS_CHANGES | AUDIT_PENDING | none]

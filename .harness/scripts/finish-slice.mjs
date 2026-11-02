@@ -10,7 +10,7 @@ const gitIn = (cwd, args) =>
   execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
 
 export function parseActiveTargets(line) {
-  const match = line?.match(/Target files:\s*(.+)$/i);
+  const match = line?.match(/Target files:\s*([^[\n]+)/i);
   if (!match) return [];
   return match[1]
     .replace(/[`*]/g, '')
