@@ -34,6 +34,7 @@ You MUST update the tracking files:
 - Record each check you ran with its exact command and result. A check you did not run is "unverified". Never write "passed" for a check you did not run.
 - Mark a slice `[x]` in `.spec/PROGRESS.md` only if its verification passed. Otherwise leave it `[IN_PROGRESS]`.
 - Commit only on the branch named in the request or in `.spec/SESSION_HANDOFF.md`. Never push to `main` directly.
+- Use `node .harness/scripts/finish-slice.mjs "<commit message>"` to commit finished slices so cryptographic `Referee-*` trailers are attached.
 - Write commit messages that say what changed and why, in plain English.
 - Open a pull request into `main` when the work is pushed. You may merge that PR yourself only when every condition below holds. Otherwise leave it open for Claude Code or the operator.
   - The change is non-destructive: no file deletions, no database or schema migrations, no force-pushes, no history rewrites, and no edits to `.claude/`, `.harness/`, or `.harness-version`.
