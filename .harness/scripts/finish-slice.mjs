@@ -5,10 +5,41 @@ import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { appendBatchEvent, resolveRoot } from './status-batch.mjs';
 import { getRefereeEngineHash, detectNaturalLull } from './referee.mjs';
-import { analyze, parseDiff, parseNameStatus } from './pr-scope-check.mjs';
 
 const gitIn = (cwd, args) =>
   execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+
+export function parseActiveTargets(line) {
+  const match = line?.match(/Target files:\s*([^[\n]+)/i);
+  if (!match) return [];
+  return match[1]
+    .replace(/[`*]/g, '')
+    .split(',')
+    .map((s) => s.trim().replace(/^\.\//, ''))
+    .filter(Boolean);
+}
+
+export function isTargetMatch(relFile, targets) {
+  const norm = relFile.replace(/\\/g, '/');
+  const trackingFiles = [
+    '.spec/PROGRESS.md',
+    '.spec/SESSION_HANDOFF.md',
+    '.spec/.session-telemetry.json',
+    '.spec/STATUS_BATCH.jsonl',
+  ];
+  if (trackingFiles.includes(norm)) return true;
+  return targets.some((target) => {
+    const clean = target.replace(/\\/g, '/').replace(/^\.\//, '');
+    if (!clean) return false;
+    if (clean.endsWith('/')) {
+      return norm.startsWith(clean);
+    }
+    if (norm === clean || norm.startsWith(clean + '/')) {
+      return true;
+    }
+    return norm.startsWith(clean);
+  });
+}
 
 export function finishSlice(root, commitMsg, options = {}) {
   const refereeScript = path.join(root, '.harness', 'scripts', 'referee.mjs');
@@ -33,34 +64,58 @@ export function finishSlice(root, commitMsg, options = {}) {
   const activeLine = lines[activeIdx];
   const sliceIdMatch = activeLine.match(/\*\*Slice\s+([^*]+)\*\*/);
   const sliceId = sliceIdMatch ? sliceIdMatch[1].trim() : 'active';
-  const sliceType = /\[UI \/ VISUAL\]/i.test(activeLine) ? 'UI / VISUAL' : 'CORE / DATA';
+  const targets = parseActiveTargets(activeLine);
 
-  // 2. Run quick checks if not skipped by mock
+  // 2. Enforce scope neutrality before modifying or staging files
+  const statusOut = execFileSync('git', ['status', '--porcelain'], { cwd: root, encoding: 'utf8' });
+  const statusLines = statusOut.split('\n').filter(Boolean);
+  const changedFiles = statusLines.map((l) => l.slice(2).trim().replace(/.* -> /, ''));
+
+  const outOfScope = changedFiles.filter((f) => !isTargetMatch(f, targets));
+  if (outOfScope.length > 0) {
+    throw new Error(`Scope check failed: ${outOfScope.join(', ')} modified outside Target files for Slice ${sliceId}.`);
+  }
+
+  // 3. Run verification tests (never mask failures)
   if (!options.skipChecks) {
-    try {
-      execFileSync('npm', ['test', '--silent'], { cwd: root, stdio: 'ignore' });
-    } catch {
-      // fallback to node test if npm test fails or doesn't exist
+    let testRan = false;
+    const pkgPath = path.join(root, 'package.json');
+    if (fs.existsSync(pkgPath)) {
       try {
-        execFileSync('node', ['--test', '.harness/hooks/lib/runner-matcher.test.mjs'], { cwd: root, stdio: 'ignore' });
+        const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+        if (pkg.scripts?.test) {
+          execFileSync('npm', ['test'], { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+          testRan = true;
+        }
       } catch (err) {
-        throw new Error(`Verification tests failed: ${err.message}`);
+        const output = (err.stdout || '') + (err.stderr || '');
+        throw new Error(`Verification tests failed (npm test):\n${output || err.message}`);
+      }
+    }
+    if (!testRan) {
+      try {
+        execFileSync('node', ['--test', '.harness/hooks/lib/runner-matcher.test.mjs', '.harness/scripts/referee.test.mjs'], {
+          cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe']
+        });
+      } catch (err) {
+        const output = (err.stdout || '') + (err.stderr || '');
+        throw new Error(`Verification tests failed (node --test):\n${output || err.message}`);
       }
     }
   }
 
-  // 3. Mark slice [x] in PROGRESS.md
+  // 4. Mark slice [x] in PROGRESS.md
   lines[activeIdx] = activeLine.replace(/\[IN_PROGRESS\]/g, '').replace(/-\s*\[\s*\]/, '- [x]').trim();
   fs.writeFileSync(progressPath, lines.join('\n'), 'utf8');
 
-  // 4. Update SESSION_HANDOFF.md with prose note
+  // 5. Update SESSION_HANDOFF.md
   const handoffText = fs.existsSync(handoffPath) ? fs.readFileSync(handoffPath, 'utf8') : '';
   const updatedHandoff = handoffText
     .replace(/\*\*Active Slice:\*\*.*/i, '**Active Slice:** none')
     .replace(/\*\*Verification Status:\*\*.*/i, `**Verification Status:** Verified via finish-slice.mjs (Slice ${sliceId})`);
   fs.writeFileSync(handoffPath, updatedHandoff, 'utf8');
 
-  // 5. Update session telemetry & batch events before staging
+  // 6. Update session telemetry & batch events
   if (fs.existsSync(telemetryPath)) {
     try {
       const telem = JSON.parse(fs.readFileSync(telemetryPath, 'utf8'));
@@ -77,12 +132,31 @@ export function finishSlice(root, commitMsg, options = {}) {
     summary: `Finished Slice ${sliceId} with Referee-Verdict: VERIFIED`
   });
 
-  // 6. Stage files and compute tree sha
-  gitIn(root, ['add', '-A']);
+  // 7. Stage ONLY target files and tracking files (never git add -A)
+  const trackingFiles = [
+    '.spec/PROGRESS.md',
+    '.spec/SESSION_HANDOFF.md',
+    '.spec/.session-telemetry.json',
+    '.spec/STATUS_BATCH.jsonl',
+  ];
+  const allPermitted = Array.from(new Set([...changedFiles, ...trackingFiles]))
+    .filter((f) => isTargetMatch(f, targets) && fs.existsSync(path.join(root, f)));
+
+  if (allPermitted.length > 0) {
+    execFileSync('git', ['add', '--', ...allPermitted], { cwd: root, stdio: 'ignore' });
+  }
+
+  // Verify no unstaged dirty files remain
+  const remainingDirty = gitIn(root, ['status', '--porcelain']);
+  const unstaged = remainingDirty.split('\n').filter(Boolean).filter((l) => !/^[MADRC] /.test(l));
+  if (unstaged.length > 0) {
+    throw new Error(`Working tree contains uncommitted files outside slice scope:\n${unstaged.join('\n')}`);
+  }
+
   const treeSha = gitIn(root, ['write-tree']);
   const engineHash = getRefereeEngineHash(refereeScript);
 
-  // 7. Commit with Referee-* trailers
+  // 8. Commit with Referee-* trailers
   const trailers = [
     '--trailer', 'Referee-Verdict: VERIFIED',
     '--trailer', `Referee-Tree: ${treeSha}`
@@ -94,7 +168,7 @@ export function finishSlice(root, commitMsg, options = {}) {
   gitIn(root, ['commit', '-m', commitMsg, ...trailers]);
   const commitSha = gitIn(root, ['log', '-1', '--oneline']);
 
-  // 8. Natural lull check
+  // 9. Natural lull check
   const lull = detectNaturalLull(root);
 
   return {

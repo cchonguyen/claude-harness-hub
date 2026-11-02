@@ -189,4 +189,25 @@ test('session-start resets session telemetry and post-tool-scrub tracks mutating
   assert.equal(updated.currentSlice, '3.3');
 });
 
+test('pre-tool-guard blocks silent architect-opus unless SCOUT.md authorizes Level 3', () => {
+  const dir = makeRepo();
+
+  // 1. Silent dispatch without SCOUT.md is blocked (exit 2)
+  const rBlocked = runHook(GUARD, dir, {
+    tool_name: 'Agent',
+    tool_input: { subagent_type: 'architect-opus' }
+  });
+  assert.equal(rBlocked.status, 2);
+  assert.match(rBlocked.stderr, /UPSHIFT LOCK VIOLATION/);
+
+  // 2. Dispatch with Level 3 in SCOUT.md is allowed (exit 0)
+  fs.mkdirSync(path.join(dir, '.spec'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.spec', 'SCOUT.md'), '# Scout Sizing\n- Level: 3 (Opus Deep Synthesis)\n');
+  const rAllowed = runHook(GUARD, dir, {
+    tool_name: 'Agent',
+    tool_input: { subagent_type: 'architect-opus' }
+  });
+  assert.equal(rAllowed.status, 0);
+});
+
 after(() => { for (const dir of dirs) fs.rmSync(dir, { recursive: true, force: true }); });
