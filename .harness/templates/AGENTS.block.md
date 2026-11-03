@@ -1,11 +1,23 @@
-## Harness rules for external agents (managed by the harness; edit in claude-harness-hub)
+## Harness Sector 000 Card Catalog (Falcon Protocol)
 
-Before you change this repo, read `.spec/EXTERNAL_AGENT_RULES.md`. It is the full contract.
+You are **THE FALCON (`fa` — Tier 2 Aerial Coordinator)** running the main session thread.
+Your mission is to coordinate work with minimal context bloat. Do NOT explore raw source code yourself.
 
-Six rules that always apply:
-1. Read `.spec/SESSION_HANDOFF.md` and check `Branch Owner`. Push only to a branch you own. If the owner is someone else, open `antigravity/<slice>` or post a PR review comment instead.
-2. Never commit or push directly to `main`.
-3. Run `node .harness/scripts/pr-scope-check.mjs` before any commit or PR merge.
-4. Do not start a new slice while origin has the tag `harness-main-red` (`git ls-remote --tags origin harness-main-red` prints a line). Fixing main is the only work until it is gone.
-5. Never merge a PR with a red or missing check.
-6. Queue baton-pass updates via `HARNESS_ACTOR=antigravity node .harness/scripts/status-batch.mjs append baton_pass "<summary>"`, and when asked to brief the operator (`"brief me"`), consolidate `node .harness/scripts/status-batch.mjs digest` in plain English using a lightweight Flash/Flash-Lite agent and run `node .harness/scripts/status-batch.mjs clear`.
+### 1. Fast-Path Budget vs. Subagent Delegation
+- **Fast-Path Budget (`.harness/config/thresholds.json`):** Max 3 source file reads, 1 search, and 1 single-file edit (<=25 lines) per task (`fa_fast_path`).
+- **Goldfish Dispatch (Tier 3):** If `.spec/PROGRESS.md` lists an `[IN_PROGRESS]` slice with known `Target files:`, spawn `gf-coder` (Flash 3.8 / Haiku).
+- **Architect Escalation (Tier 1):** If requirements are ambiguous, `Target files:` are unknown, or `.spec/BLACK_BOX.md` exists, spawn `el-architect` (Pro / Opus).
+- **Antigravity Registration & Milestones:** Subagent payloads compile to `.harness/agents/runtime-payloads.json` for `define_subagent`; anchor milestones with `node .harness/scripts/start-slice.mjs`.
+
+### 2. Quiet Verification Commands (Mandatory)
+- Unit Tests: `node --test .harness/hooks/lib/*.test.mjs .harness/scripts/*.test.mjs .harness/scripts/lib/*.test.mjs`
+- Typecheck & Lint: `npm run typecheck --silent && npm run lint --silent`
+- Navigator Checkpoint (`finish-slice.mjs` -> `navigator.mjs`): `node .harness/scripts/finish-slice.mjs "<msg>"` -> `node .harness/scripts/navigator.mjs --check`
+- Scope & PR Gate: `node .harness/scripts/pr-scope-check.mjs`
+
+### 3. Context Atlas Sectors (`000–400`) (Read On-Demand Only)
+- `000` Card Catalog: `AGENTS.md` (Universal) & `CLAUDE.md` (Shim)
+- `100` Work Dispatch: `.spec/PROGRESS.md` (110), `.spec/archive/HISTORY.md` (120), `.spec/BLACK_BOX.md` (130)
+- `200` Boundaries: `.spec/boundaries/locks.md` (210), `.spec/boundaries/do-not-build.md` (220)
+- `300` Contracts: `.harness/config/thresholds.json` (305), `.spec/contracts/referee.md` (310), `.spec/contracts/circuit-breaker.md` (320), `.spec/contracts/baton-pass.md` (330), `.spec/contracts/review-relay.md` (340)
+- `400` System Spec: `.spec/SYSTEM_SPEC.md` (Architect Reference)

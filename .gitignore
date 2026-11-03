@@ -1,5 +1,6 @@
 # Harness ephemeral session state
 .spec/.strike-counter.json
+.spec/.session-telemetry.json
 .spec/.learn-staging.txt
 .spec/HANDOFF_PACKET.md
 .spec/DEBUG_PACKET.md
@@ -10,3 +11,12 @@
 .spec/.vibe-checkpoint.json
 node_modules/
 dist/
+
+# Local machine files and secrets (keep the public repo clean)
+.env
+.env.*
+!.env.example
+.DS_Store
+.claude/settings.local.json
+.harness-backup/
+*.log

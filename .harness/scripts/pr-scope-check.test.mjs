@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { analyze, parseDiff, parseNameStatus } from './pr-scope-check.mjs';
+import { analyze, formatJsonVerdict, parseDiff, parseNameStatus, isCommentLine, ASSERTION, SKIP_MARK, isPackageJsonVersionOnly } from './pr-scope-check.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const SCRIPT = path.join(here, 'pr-scope-check.mjs');
@@ -115,6 +115,48 @@ test('each Red tripwire fires and marks the slice Red', () => {
   for (const f of files) assert.ok(r.problems.some((p) => p.includes(f)), `missing tripwire for ${f}`);
 });
 
+test('package.json with only a version bump does not trip the dependency manifest wire', () => {
+  const diff = testDiff('package.json', ['  "version": "0.8.3",'], ['  "version": "0.8.2",']);
+  const r = analyze({ changed: ['package.json'], diff, progress: '' });
+  assert.equal(r.tripwireFired, false);
+  assert.equal(r.problems.length, 0);
+});
+
+test('package.json with dependency changes trips the dependency manifest wire', () => {
+  const diff = testDiff('package.json', ['  "lodash": "^4.17.21"'], []);
+  const r = analyze({ changed: ['package.json'], diff, progress: '' });
+  assert.equal(r.tripwireFired, true);
+  assert.ok(r.problems.some((p) => p.includes('package.json')));
+});
+
+test('package.json with only a version bump is allowed outside active slice Target files', () => {
+  const diff = new Map([
+    ['src/foo.js', { added: ['const x = 1;'], removed: [] }],
+    ['package.json', { added: ['  "version": "1.0.1",'], removed: ['  "version": "1.0.0",'] }],
+  ]);
+  const progress = '- [ ] **Slice 1.1: Feature** [IN_PROGRESS] Target files: src/foo.js | Coords: [110] | Verify: npm test\n';
+  const r = analyze({ changed: ['src/foo.js', 'package.json'], diff, progress });
+  assert.equal(r.tripwireFired, false);
+  assert.deepEqual(r.problems, []);
+});
+
+test('isPackageJsonVersionOnly identifies pure version bumps vs dependencies', () => {
+  assert.equal(isPackageJsonVersionOnly(null), false);
+  assert.equal(isPackageJsonVersionOnly({ added: [], removed: [] }), false);
+  assert.equal(isPackageJsonVersionOnly({
+    added: ['"version": "1.2.3"'],
+    removed: ['"version": "1.2.2"'],
+  }), true);
+  assert.equal(isPackageJsonVersionOnly({
+    added: ['  "version": "1.2.3",'],
+    removed: ['  "version": "1.2.2",'],
+  }), true);
+  assert.equal(isPackageJsonVersionOnly({
+    added: ['  "version": "1.2.3",', '  "dependencies": {}'],
+    removed: ['  "version": "1.2.2",'],
+  }), false);
+});
+
 test('a deleted file is a Red tripwire', () => {
   const r = analyze({ changed: ['src/a.js'], deleted: ['src/old.js'], progress: '' });
   assert.ok(r.problems.some((p) => p.includes('(file deleted): src/old.js')));
@@ -196,4 +238,250 @@ test('strict CLI exits 1 on a deletion, advisory CLI exits 0 for the same diff',
   assert.match(advisory.stdout, /advisory/);
 
   fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('formatJsonVerdict returns CLEAN verdict and valid schema when no problems exist', () => {
+  const verdict = formatJsonVerdict({
+    changed: ['src/app.js'],
+    deleted: [],
+    strict: false,
+    base: 'origin/main',
+    head: 'HEAD',
+    problems: [],
+    notes: ['Vibe Mode: no slice is in progress'],
+    tripwireFired: false,
+    sliceType: 'UI / VISUAL',
+  });
+
+  assert.equal(verdict.schemaVersion, '1.0.0');
+  assert.equal(typeof verdict.timestamp, 'string');
+  assert.ok(!isNaN(Date.parse(verdict.timestamp)));
+  assert.equal(verdict.verdict, 'CLEAN');
+  assert.equal(verdict.mode, 'advisory');
+  assert.deepEqual(verdict.target, { base: 'origin/main', head: 'HEAD' });
+  assert.deepEqual(verdict.summary, {
+    changedFiles: 1,
+    deletedFiles: 0,
+    problemCount: 0,
+    tripwireFired: false,
+    noteCount: 1,
+  });
+  assert.equal(verdict.sliceType, 'UI / VISUAL');
+  assert.deepEqual(verdict.findings, []);
+  assert.deepEqual(verdict.notes, ['Vibe Mode: no slice is in progress']);
+});
+
+test('formatJsonVerdict categorizes problems, generates finding IDs, sets severities, and summarizes counts', () => {
+  const problems = [
+    'Red tripwire (schema file): src/schema.sql',
+    "Outside the slice's Target files: src/other.js",
+    '2 slices are [IN_PROGRESS]. The harness allows only one.',
+    'CORE / DATA slice needs a test file change',
+    'Yellow: 2 assertion line(s) removed from tests with no replacement.',
+    'Spoke changed an engine file, which the hub owns: .harness/hooks/x.mjs',
+    'The diff is empty. There is nothing to review.',
+  ];
+
+  // Advisory mode with tripwire fired -> severity error
+  const v1 = formatJsonVerdict({
+    changed: ['src/schema.sql', 'src/other.js'],
+    deleted: ['old.js'],
+    strict: false,
+    base: 'main',
+    head: 'feat',
+    problems,
+    notes: ['note1', 'note2'],
+    tripwireFired: true,
+    sliceType: 'CORE / DATA',
+  });
+
+  assert.equal(v1.verdict, 'NEEDS_CHANGES');
+  assert.equal(v1.mode, 'advisory');
+  assert.deepEqual(v1.summary, {
+    changedFiles: 2,
+    deletedFiles: 1,
+    problemCount: 7,
+    tripwireFired: true,
+    noteCount: 2,
+  });
+  assert.equal(v1.findings.length, 7);
+  assert.deepEqual(v1.findings.map((f) => f.id), [
+    'REV-001', 'REV-002', 'REV-003', 'REV-004', 'REV-005', 'REV-006', 'REV-007',
+  ]);
+  assert.deepEqual(v1.findings.map((f) => f.type), [
+    'tripwire', 'scope', 'scope', 'test', 'test', 'engine', 'other',
+  ]);
+  assert.ok(v1.findings.every((f) => f.severity === 'error'));
+  assert.ok(v1.findings.every((f) => f.status === 'open'));
+
+  // Advisory mode with no tripwire -> severity warning
+  const v2 = formatJsonVerdict({
+    problems: ['Outside the slice\'s Target files: src/other.js'],
+    strict: false,
+    tripwireFired: false,
+  });
+  assert.equal(v2.findings[0].severity, 'warning');
+
+  // Strict mode with no tripwire -> severity error
+  const v3 = formatJsonVerdict({
+    problems: ['Outside the slice\'s Target files: src/other.js'],
+    strict: true,
+    tripwireFired: false,
+  });
+  assert.equal(v3.findings[0].severity, 'error');
+  assert.equal(v3.mode, 'strict');
+});
+
+test('CLI --output-verdict writes valid JSON to disk while preserving text report', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'scope-verdict-'));
+  const git = (...args) => execFileSync('git', args, { cwd: dir, stdio: 'ignore' });
+  git('init', '-q', '-b', 'main');
+  git('config', 'user.email', 'test@example.com');
+  git('config', 'user.name', 'test');
+  fs.writeFileSync(path.join(dir, 'file.txt'), 'hello\n');
+  git('add', '.');
+  git('commit', '-q', '-m', 'initial');
+  git('checkout', '-q', '-b', 'feature');
+  fs.writeFileSync(path.join(dir, 'file.txt'), 'hello world\n');
+  git('add', '.');
+  git('commit', '-q', '-m', 'update');
+
+  const verdictPath = path.join(dir, '.spec', 'AUDIT_VERDICT.json');
+  const res = spawnSync(process.execPath, [SCRIPT, 'main', 'HEAD', '--output-verdict', verdictPath], {
+    cwd: dir, encoding: 'utf8',
+  });
+
+  assert.equal(res.status, 0);
+  assert.match(res.stdout, /PR SCOPE: CLEAN/);
+  assert.ok(fs.existsSync(verdictPath), 'verdict file should exist');
+
+  const parsed = JSON.parse(fs.readFileSync(verdictPath, 'utf8'));
+  assert.equal(parsed.schemaVersion, '1.0.0');
+  assert.equal(parsed.verdict, 'CLEAN');
+  assert.deepEqual(parsed.target, { base: 'main', head: 'HEAD' });
+  assert.equal(parsed.summary.changedFiles, 1);
+  assert.equal(parsed.summary.problemCount, 0);
+
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('CLI --json prints valid JSON verdict to stdout', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'scope-json-'));
+  const git = (...args) => execFileSync('git', args, { cwd: dir, stdio: 'ignore' });
+  git('init', '-q', '-b', 'main');
+  git('config', 'user.email', 'test@example.com');
+  git('config', 'user.name', 'test');
+  fs.writeFileSync(path.join(dir, 'file.txt'), 'initial\n');
+  git('add', '.');
+  git('commit', '-q', '-m', 'initial');
+  git('checkout', '-q', '-b', 'feature');
+  fs.writeFileSync(path.join(dir, 'file.txt'), 'updated\n');
+  git('add', '.');
+  git('commit', '-q', '-m', 'updated');
+
+  const res = spawnSync(process.execPath, [SCRIPT, 'main', 'HEAD', '--json'], {
+    cwd: dir, encoding: 'utf8',
+  });
+
+  assert.equal(res.status, 0);
+  const parsed = JSON.parse(res.stdout);
+  assert.equal(parsed.schemaVersion, '1.0.0');
+  assert.equal(parsed.verdict, 'CLEAN');
+  assert.equal(parsed.summary.changedFiles, 1);
+
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('comment lines containing assert do not count as added assertions', () => {
+  const r = analyze({
+    changed: ['src/foo.test.js'],
+    diff: testDiff('src/foo.test.js', [
+      '// assert(something)',
+      '  # assert x == 1',
+      '/* assert.equal(1, 1) */',
+      ' * assert(y)',
+      '-- assert this',
+    ]),
+    progress: ACTIVE('CORE / DATA', 'src/'),
+  });
+  assert.ok(r.problems.some((p) => p.includes('no assertion line was added')));
+
+  const r2 = analyze({
+    changed: ['src/foo.test.js'],
+    diff: testDiff('src/foo.test.js', ['// assert(replacement)'], ['assert(original);']),
+  });
+  assert.ok(r2.problems.some((p) => p.startsWith('Yellow: 1 assertion line(s) removed')));
+});
+
+test('comment lines with test.skip or skip marks are not flagged as skipped tests', () => {
+  const r = analyze({
+    changed: ['src/foo.test.js'],
+    diff: testDiff('src/foo.test.js', [
+      "// test.skip('disabled test', () => {});",
+      "// it.skip('skip me', () => {});",
+      '# @pytest.mark.skip',
+      '# pytest.skip("skip reason")',
+      '// test.todo("later")',
+      '/* describe.skip("suite", () => {}) */',
+      'expect(1).toBe(1);',
+    ]),
+  });
+  assert.deepEqual(r.problems, []);
+});
+
+test('modern assertions across frameworks are recognized as assertions', () => {
+  const assertions = [
+    { file: 'src/foo.test.js', line: 't.is(a, b);' },
+    { file: 'src/foo.test.js', line: 't.true(val);' },
+    { file: 'src/foo.test.js', line: 't.false(val);' },
+    { file: 'src/foo.test.js', line: 't.assert(val);' },
+    { file: 'src/foo.test.js', line: 'item.should.equal(1);' },
+    { file: 'src/foo.test.js', line: 'expect(val).to.be.true;' },
+    { file: 'src/foo.test.js', line: 'expect(val).toMatch(/regex/);' },
+    { file: 'src/foo.test.js', line: 'expect(fn).toThrow();' },
+    { file: 'tests/test_foo.py', line: 'self.assertEqual(a, b)' },
+    { file: 'tests/test_foo.py', line: 'assert a == b' },
+    { file: 'tests/test_foo.py', line: 'pytest.raises(ValueError)' },
+    { file: 'tests/test_foo.py', line: 'self.assertRaises(KeyError)' },
+    { file: 'tests/foo.test.rs', line: 'assert_eq!(a, b);' },
+    { file: 'tests/foo.test.rs', line: 'assert_ne!(a, b);' },
+    { file: 'tests/foo.test.rs', line: 'assert!(condition);' },
+    { file: 'pkg/foo_test.go', line: 'require.NoError(t, err)' },
+    { file: 'pkg/foo_test.go', line: 't.Error("failed")' },
+    { file: 'pkg/foo_test.go', line: 't.Fatal("failed")' },
+  ];
+
+  for (const { file, line } of assertions) {
+    const dir = file.split('/')[0];
+    const r = analyze({
+      changed: [file],
+      diff: testDiff(file, [line]),
+      progress: ACTIVE('CORE / DATA', `${dir}/`),
+    });
+    assert.deepEqual(r.problems, [], `Assertion line not recognized: ${line}`);
+  }
+});
+
+test('SKIP_MARK matches modern framework skip patterns when uncommented', () => {
+  const skipPatterns = [
+    "it.skip('later', () => {})",
+    "test.skip('later', () => {})",
+    "describe.skip('suite', () => {})",
+    "it.only('focus', () => {})",
+    "test.only('focus', () => {})",
+    "describe.only('focus', () => {})",
+    "xit('skip', () => {})",
+    "xdescribe('skip', () => {})",
+    "test.todo('todo test')",
+    "@pytest.mark.skip(reason='temp')",
+    "@skip('temp')",
+    "@unittest.skip('broken')",
+    "pytest.skip('skipping')",
+    "t.Skip('skip go test')",
+    "t.skip('skip go test')",
+  ];
+
+  for (const line of skipPatterns) {
+    assert.ok(SKIP_MARK.test(line), `Expected SKIP_MARK to match: ${line}`);
+  }
 });

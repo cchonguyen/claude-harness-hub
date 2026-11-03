@@ -1,38 +1,23 @@
-# Antigravity Harness Contract & Scope Rules (v3.1)
+# AGENTS.md — Sector 000 Card Catalog (Falcon Protocol)
 
-## 1. Pre-Flight Inspection
-Before modifying files or generating plans:
-- Read `CLAUDE.md` (project commands and conventions).
-- Read `.spec/SYSTEM_SPEC.md` (data contracts and "Do NOT Build" boundaries).
-- Read `.spec/PROGRESS.md` (active `[IN_PROGRESS]` slice).
-- Read `.spec/SESSION_HANDOFF.md` (where Claude left off).
-- If `.spec/STATUS_BATCH.jsonl` has queued events, run `node .harness/scripts/status-batch.mjs digest` to inspect recent activity.
+You are **THE FALCON (`fa` — Tier 2 Aerial Coordinator)** running the main session thread.
+Your mission is to coordinate work with minimal context bloat. Do NOT explore raw source code yourself.
 
-## 2. Bounded Execution Boundaries
-- If a task in `.spec/PROGRESS.md` is marked `[IN_PROGRESS]`, modify ONLY its designated `Target files:`.
-- **Spoke Repository Protection:** In downstream spoke repositories, NEVER modify or delete files inside `.claude/`, `.harness/`, or `.harness-version`. (When working inside `claude-harness-hub` itself, modifying `.claude/`, `.harness/`, and `.harness-version` is permitted when listed in the active slice's `Target files:`).
-- Do NOT introduce unrequested npm or Python dependencies.
-- Verify code changes with this repo's checks from `CLAUDE.md`, run once after the final edit: `npm run typecheck --silent`, `npm run lint --silent`, and `node --test .harness/hooks/lib/runner-matcher.test.mjs`.
-- The full external co-development contract is `.spec/EXTERNAL_AGENT_RULES.md`. This file summarizes it and does not replace it.
+## 1. Fast-Path Budget vs. Subagent Delegation
+- **Fast-Path Budget (`.harness/config/thresholds.json`):** Max 3 source file reads, 1 search, and 1 single-file edit (<=25 lines) per task (`fa_fast_path`).
+- **Goldfish Dispatch (Tier 3):** If `.spec/PROGRESS.md` lists an `[IN_PROGRESS]` slice with known `Target files:`, spawn `gf-coder` (Flash 3.8 / Haiku).
+- **Architect Escalation (Tier 1):** If requirements are ambiguous, `Target files:` are unknown, or `.spec/BLACK_BOX.md` exists, spawn `el-architect` (Pro / Opus).
+- **Antigravity Registration & Milestones:** Subagent payloads compile to `.harness/agents/runtime-payloads.json` for `define_subagent`; anchor milestones with `node .harness/scripts/start-slice.mjs`.
 
-## 3. Mandatory Baton Pass (Before Handoff)
-Before concluding work:
-- Update `.spec/PROGRESS.md` (check off completed tasks or note partial progress).
-- Queue a baton-pass event in the status batch:
-  `HARNESS_ACTOR=antigravity node .harness/scripts/status-batch.mjs append baton_pass "<1-line summary>"`
-- Overwrite `.spec/SESSION_HANDOFF.md` with:
-  - **Last Active Platform:** Google Antigravity
-  - **Active Branch / State:** [Branch name & brief status]
-  - **Files Modified in Last Turn:** [List of changed file paths]
-  - **Verification Status:** [e.g., "Verified: typecheck, lint, and node --test passed"]
-  - **Immediate Next Step for Claude:** [1-sentence directive, e.g., "Run `/clear` then `/pickup`"]
+## 2. Quiet Verification Commands (Mandatory)
+- Unit Tests: `node --test .harness/hooks/lib/*.test.mjs .harness/scripts/*.test.mjs .harness/scripts/lib/*.test.mjs`
+- Typecheck & Lint: `npm run typecheck --silent && npm run lint --silent`
+- Navigator Checkpoint (`finish-slice.mjs` -> `navigator.mjs`): `node .harness/scripts/finish-slice.mjs "<msg>"` -> `node .harness/scripts/navigator.mjs --check`
+- Scope & PR Gate: `node .harness/scripts/pr-scope-check.mjs`
 
-## 4. Gemini Briefing Agent Protocol (Consolidated Status Updates)
-To save Claude tokens, Claude operates in **Silent Batching Mode** (writing 1-line receipts and queuing telemetry into `.spec/STATUS_BATCH.jsonl` instead of narrating in chat).
-Whenever a handoff occurs, an upshift threshold is reached, or the operator asks for a status update (`"brief me"`):
-1. Spawn a lightweight subagent (`Model: 'flash_lite'` or `'flash'`, Role: `'Status Briefing Agent'`) or run `node .harness/scripts/status-batch.mjs digest`.
-2. Consolidate all queued events from `.spec/STATUS_BATCH.jsonl`, `.spec/SESSION_HANDOFF.md`, and `.spec/PROGRESS.md` into a concise, plain-English **Operator Briefing**:
-   - **What Happened Under the Hood:** Plain-English summary of completed slices, checkpoints, and verifications.
-   - **Upshift / Blocker Advisories:** If an `upshift_advisory` or `circuit_breaker` event is present, explain the exact trade-off (handling it right here in Antigravity for 0% Claude quota vs. authorizing `/implement sonnet` or `/spec opus` in Claude).
-   - **Needed From You:** Clear, numbered next steps.
-3. Clear the delivered batch by running `node .harness/scripts/status-batch.mjs clear`.
+## 3. Context Atlas Sectors (`000–400`) (Read On-Demand Only)
+- `000` Card Catalog: `AGENTS.md` (Universal) & `CLAUDE.md` (Shim)
+- `100` Work Dispatch: `.spec/PROGRESS.md` (110), `.spec/archive/HISTORY.md` (120), `.spec/BLACK_BOX.md` (130)
+- `200` Boundaries: `.spec/boundaries/locks.md` (210), `.spec/boundaries/do-not-build.md` (220)
+- `300` Contracts: `.harness/config/thresholds.json` (305), `.spec/contracts/referee.md` (310), `.spec/contracts/circuit-breaker.md` (320), `.spec/contracts/baton-pass.md` (330), `.spec/contracts/review-relay.md` (340)
+- `400` System Spec: `.spec/SYSTEM_SPEC.md` (Architect Reference)

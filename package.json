@@ -8,8 +8,8 @@
     "build": "vite build",
     "start": "NODE_ENV=production tsx server.ts",
     "test": "node --test .harness/hooks/lib/runner-matcher.test.mjs",
-    "typecheck": "tsc --noEmit",
-    "lint": "tsc --noEmit"
+    "typecheck": "node .harness/scripts/syntax-check.mjs",
+    "lint": "node .harness/scripts/navigator.mjs --check"
   },
   "dependencies": {
     "express": "^4.21.2",

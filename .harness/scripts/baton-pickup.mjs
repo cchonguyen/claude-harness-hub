@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { appendBatchEvent, readBatchEvents, resolveRoot } from './status-batch.mjs';
+import { verifyHeadTrust } from './referee.mjs';
 
 const gitSafe = (cwd, args) => {
   try {
@@ -36,16 +37,20 @@ const activeSlice = progressLines.find((l) => /^\s*-\s*\[.\].*\[IN_PROGRESS\]/.t
 const nextPendingSlice = progressLines.find((l) => /^\s*-\s*\[\s\]/.test(l) && !/\[IN_PROGRESS\]/.test(l))?.trim() || 'None';
 const batchCount = readBatchEvents(root).length;
 
+// Referee Trust Verification
+const trust = verifyHeadTrust(root);
+
 appendBatchEvent(root, {
   actor: 'claude-pickup',
   event: 'baton_pickup',
-  summary: `Picked up baton from ${lastPlatform} on ${branch} (${headCommit})`,
+  summary: `Picked up baton from ${lastPlatform} on ${branch} (${headCommit}) - Trust: ${trust.trusted ? 'VERIFIED' : 'UNVERIFIED'}`,
   details: `Next: ${nextStep}`
 });
 
 console.log([
   `✓ BATON PICKUP | Branch: ${branch} (${headCommit}) | Working tree: ${dirtyCount ? `${dirtyCount} modified` : 'clean'} | Batch queue: ${batchCount + 1} event(s)`,
-  `  Last Platform: ${lastPlatform} | Verification: ${verifyStatus}`,
+  `  Referee Trust: ${trust.trusted ? 'VERIFIED (Commit Trailer Matches HEAD Tree)' : `UNVERIFIED (${trust.reason})`}`,
+  `  Last Platform: ${lastPlatform} | Recorded Status: ${verifyStatus}`,
   `  Active Slice:  ${activeSlice}`,
   `  Next Pending:  ${nextPendingSlice}`,
   `  Directive:     ${nextStep}`
