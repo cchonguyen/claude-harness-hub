@@ -14,7 +14,7 @@
   "SubagentStop": [
     {
       "matcher": ".*",
-      "command": "node .harness/hooks/adapter.mjs elephant-exit-gate.mjs"
+      "command": "node .harness/hooks/adapter.mjs el-exit-gate.mjs"
     }
   ],
   "hooks": {
@@ -33,7 +33,7 @@
     "SubagentStop": [
       {
         "matcher": ".*",
-        "command": "node .harness/hooks/adapter.mjs elephant-exit-gate.mjs"
+        "command": "node .harness/hooks/adapter.mjs el-exit-gate.mjs"
       }
     ]
   }

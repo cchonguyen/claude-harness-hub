@@ -98,6 +98,35 @@ test('syncAgents respects agent_sync_dirs configured in thresholds.json', () => 
   fs.rmSync(root, { recursive: true, force: true });
 });
 
+test('syncAgents cleans up deprecated v2.0 files in .claude/agents and .agents/workflows', () => {
+  const root = makeTempDir();
+  const harnessAgents = path.join(root, '.harness', 'agents');
+  fs.mkdirSync(harnessAgents, { recursive: true });
+  fs.writeFileSync(path.join(harnessAgents, 'el-architect.md'), '# el-architect\n');
+  fs.writeFileSync(path.join(harnessAgents, 'gf-coder.md'), '# gf-coder\n');
+
+  // Pre-populate deprecated v2.0 files
+  const claudeAgents = path.join(root, '.claude', 'agents');
+  const workflowsDir = path.join(root, '.agents', 'workflows');
+  fs.mkdirSync(claudeAgents, { recursive: true });
+  fs.mkdirSync(workflowsDir, { recursive: true });
+
+  fs.writeFileSync(path.join(claudeAgents, 'elephant.md'), 'deprecated');
+  fs.writeFileSync(path.join(claudeAgents, 'librarian.md'), 'deprecated');
+  fs.writeFileSync(path.join(workflowsDir, 'goldfish-coder.md'), 'deprecated');
+
+  const synced = syncAgents(root);
+  assert.ok(synced.includes('.claude/agents/el-architect.md'));
+  assert.ok(synced.includes('.claude/agents/gf-coder.md'));
+
+  // Deprecated files should be removed
+  assert.ok(!fs.existsSync(path.join(claudeAgents, 'elephant.md')));
+  assert.ok(!fs.existsSync(path.join(claudeAgents, 'librarian.md')));
+  assert.ok(!fs.existsSync(path.join(workflowsDir, 'goldfish-coder.md')));
+
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
 test('pullFromHub pulls .harness/agents and synchronizes into .claude/agents and .agents', () => {
   const hubRoot = makeTempDir('hub-');
   const spokeRoot = makeTempDir('spoke-');

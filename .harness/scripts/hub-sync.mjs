@@ -56,6 +56,32 @@ export function syncAgents(projectRoot = (process.env.CLAUDE_PROJECT_DIR || gitR
     }
   }
 
+  // Clean up deprecated v2.0 files not present in sourceDir
+  const sourceEntries = new Set(entries);
+  const deprecatedAgents = [
+    'elephant.md',
+    'goldfish-coder.md',
+    'goldfish-verifier.md',
+    'librarian.md',
+    'git-clerk.md',
+  ].filter((dep) => !sourceEntries.has(dep));
+
+  const cleanupDirs = [
+    ...targetDirs,
+    path.join(projectRoot, '.agents', 'workflows'),
+  ];
+
+  for (const cDir of cleanupDirs) {
+    if (fs.existsSync(cDir)) {
+      for (const dep of deprecatedAgents) {
+        const depPath = path.join(cDir, dep);
+        if (fs.existsSync(depPath)) {
+          fs.rmSync(depPath, { force: true });
+        }
+      }
+    }
+  }
+
   const synced = [];
   for (const targetDir of targetDirs) {
     fs.mkdirSync(targetDir, { recursive: true });
