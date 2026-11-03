@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { branchOwnerOf, mainRedState } from './session-signals.mjs';
+import { branchOwnerOf, mainRedState, whereWeLeftOff } from './session-signals.mjs';
 
 const git = (cwd, ...args) => execFileSync('git', args, { cwd, stdio: 'ignore' });
 
@@ -53,4 +53,34 @@ test('branchOwnerOf reads the handoff field, and returns null when it is absent'
   assert.equal(branchOwnerOf('Branch Owner: Claude'), 'claude');
   assert.equal(branchOwnerOf('Last Active Platform: Claude'), null);
   assert.equal(branchOwnerOf(''), null);
+});
+
+test('whereWeLeftOff reads the Immediate Next Step and strips markdown', () => {
+  const handoff = [
+    '# SESSION HANDOFF',
+    '- **Active Branch / State:** `main` (v3 slices done).',
+    '- **Immediate Next Step for Claude:** Run `/clear` then `/pickup`.',
+  ].join('\n');
+  assert.equal(whereWeLeftOff(handoff), 'Where we left off: Run /clear then /pickup.');
+});
+
+test('whereWeLeftOff falls back to Active Branch / State when there is no next step', () => {
+  assert.equal(
+    whereWeLeftOff('- **Active Branch / State:** main\n'),
+    'Where we left off: main',
+  );
+});
+
+test('whereWeLeftOff returns null for an empty or unrelated handoff', () => {
+  assert.equal(whereWeLeftOff(''), null);
+  assert.equal(whereWeLeftOff(undefined), null);
+  assert.equal(whereWeLeftOff('just some prose'), null);
+});
+
+test('whereWeLeftOff is always one line, even when the field wraps', () => {
+  const long = 'word '.repeat(80);
+  const line = whereWeLeftOff(`- **Immediate Next Step for Claude:** ${long}\nnext paragraph`);
+  assert.ok(!line.includes('\n'));
+  assert.ok(line.length <= 'Where we left off: '.length + 160);
+  assert.ok(line.endsWith('...'));
 });

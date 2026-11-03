@@ -22,3 +22,18 @@ export function branchOwnerOf(handoffText) {
   const match = String(handoffText || '').match(/Branch Owner:\**\s*(claude|antigravity)\b/i);
   return match ? match[1].toLowerCase() : null;
 }
+
+// One line for the session-start banner: the handoff's "Immediate Next Step", else its "Active Branch / State".
+// Returns null when the handoff has neither. Pure text work, no file reads.
+export function whereWeLeftOff(handoffText) {
+  const text = String(handoffText || '');
+  const field = (label) => {
+    const match = text.match(new RegExp(`${label}:\\**[ \\t]*(.+)$`, 'm'));
+    if (!match) return '';
+    return match[1].replace(/\*\*/g, '').replace(/`/g, '').replace(/\s+/g, ' ').trim();
+  };
+  const line = field('Immediate Next Step for Claude') || field('Active Branch / State');
+  if (!line) return null;
+  const clipped = line.length > 160 ? `${line.slice(0, 157).trimEnd()}...` : line;
+  return `Where we left off: ${clipped}`;
+}
