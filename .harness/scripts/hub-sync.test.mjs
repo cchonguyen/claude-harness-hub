@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { syncAgents, pullFromHub } from './hub-sync.mjs';
+import { syncAgents, pullFromHub, compileRuntimePayloads, mapAntigravityModel, parseFrontmatter } from './hub-sync.mjs';
 
 function makeTempDir(prefix = 'hub-sync-test-') {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
@@ -170,4 +170,121 @@ test('pullFromHub pulls .harness/agents and synchronizes into .claude/agents and
 
   fs.rmSync(hubRoot, { recursive: true, force: true });
   fs.rmSync(spokeRoot, { recursive: true, force: true });
+});
+
+test('mapAntigravityModel maps model strings accurately', () => {
+  assert.equal(mapAntigravityModel('haiku'), 'flash');
+  assert.equal(mapAntigravityModel('claude-3-5-haiku-20241022'), 'flash');
+  assert.equal(mapAntigravityModel('flash'), 'flash');
+  assert.equal(mapAntigravityModel('gemini-2.5-flash'), 'flash');
+  assert.equal(mapAntigravityModel('opus'), 'pro');
+  assert.equal(mapAntigravityModel('claude-3-opus-20240229'), 'pro');
+  assert.equal(mapAntigravityModel('pro'), 'pro');
+  assert.equal(mapAntigravityModel('gemini-2.5-pro'), 'pro');
+  assert.equal(mapAntigravityModel('sonnet'), 'pro');
+  assert.equal(mapAntigravityModel('claude-3-7-sonnet'), 'pro');
+  assert.equal(mapAntigravityModel(''), 'flash');
+  assert.equal(mapAntigravityModel(null), 'flash');
+  assert.equal(mapAntigravityModel('custom-model'), 'custom-model');
+});
+
+test('parseFrontmatter extracts YAML frontmatter and system prompt', () => {
+  const content = `---
+name: sample-agent
+description: A sample test agent.
+model: haiku
+tools: Read, Edit, Bash
+---
+You are a test agent.
+Do your job well.
+`;
+  const { frontmatter, systemPrompt } = parseFrontmatter(content);
+  assert.equal(frontmatter.name, 'sample-agent');
+  assert.equal(frontmatter.description, 'A sample test agent.');
+  assert.equal(frontmatter.model, 'haiku');
+  assert.equal(frontmatter.tools, 'Read, Edit, Bash');
+  assert.equal(systemPrompt, 'You are a test agent.\nDo your job well.');
+});
+
+test('compileRuntimePayloads compiles agent files into runtime-payloads.json', () => {
+  const root = makeTempDir();
+  const harnessAgents = path.join(root, '.harness', 'agents');
+  fs.mkdirSync(harnessAgents, { recursive: true });
+
+  fs.writeFileSync(
+    path.join(harnessAgents, 'el-architect.md'),
+    `---
+name: el-architect
+description: Tier 1 Spec Architect
+model: opus
+tools: Read, Edit, Write
+---
+You are Tier 1 Architect.
+`
+  );
+
+  fs.writeFileSync(
+    path.join(harnessAgents, 'gf-coder.md'),
+    `---
+name: gf-coder
+description: Tier 3 Code Implementer
+model: haiku
+tools: [Read, Edit, Write, Bash]
+---
+You are Tier 3 Coder.
+`
+  );
+
+  const payloads = compileRuntimePayloads(root);
+
+  const expectedPayloadsPath = path.join(harnessAgents, 'runtime-payloads.json');
+  assert.ok(fs.existsSync(expectedPayloadsPath));
+
+  const savedJson = JSON.parse(fs.readFileSync(expectedPayloadsPath, 'utf8'));
+  assert.deepEqual(payloads, savedJson);
+
+  assert.ok(payloads['el-architect']);
+  assert.equal(payloads['el-architect'].name, 'el-architect');
+  assert.equal(payloads['el-architect'].description, 'Tier 1 Spec Architect');
+  assert.equal(payloads['el-architect'].model, 'opus');
+  assert.equal(payloads['el-architect'].antigravity_model, 'pro');
+  assert.equal(payloads['el-architect'].tools, 'Read, Edit, Write');
+  assert.equal(payloads['el-architect'].systemPrompt, 'You are Tier 1 Architect.');
+
+  assert.ok(payloads['gf-coder']);
+  assert.equal(payloads['gf-coder'].name, 'gf-coder');
+  assert.equal(payloads['gf-coder'].description, 'Tier 3 Code Implementer');
+  assert.equal(payloads['gf-coder'].model, 'haiku');
+  assert.equal(payloads['gf-coder'].antigravity_model, 'flash');
+  assert.deepEqual(payloads['gf-coder'].tools, ['Read', 'Edit', 'Write', 'Bash']);
+  assert.equal(payloads['gf-coder'].systemPrompt, 'You are Tier 3 Coder.');
+
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('syncAgents generates runtime-payloads.json alongside copied templates', () => {
+  const root = makeTempDir();
+  const harnessAgents = path.join(root, '.harness', 'agents');
+  fs.mkdirSync(harnessAgents, { recursive: true });
+
+  fs.writeFileSync(
+    path.join(harnessAgents, 'gf-verifier.md'),
+    `---
+name: gf-verifier
+description: Ephemeral Verifier
+model: flash
+tools: Read, Bash
+---
+You are Verifier.
+`
+  );
+
+  syncAgents(root);
+
+  const payloadsFile = path.join(harnessAgents, 'runtime-payloads.json');
+  assert.ok(fs.existsSync(payloadsFile));
+  const data = JSON.parse(fs.readFileSync(payloadsFile, 'utf8'));
+  assert.equal(data['gf-verifier'].antigravity_model, 'flash');
+
+  fs.rmSync(root, { recursive: true, force: true });
 });
