@@ -3,6 +3,7 @@
 // Usage: node .harness/scripts/pr-scope-check.mjs [base=origin/main] [head=HEAD] [--strict] [--json] [--output-verdict <file>]
 //   Hub (default): advisory. Prints problems and always exits 0.
 //   Spoke (--strict): blocking. Exits 1 on any problem so the PR check shows red.
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -34,6 +35,18 @@ export const TRIPWIRES = [
 export const isTestFile = (file) => TEST_FILE.test(file);
 export const isEngineFile = (file) =>
   !SPOKE_OWNED.has(file) && (file.startsWith('.claude/') || file.startsWith('.harness/') || file === '.harness-version');
+
+// A hub sync is the only legitimate way for a spoke to change engine files. It rewrites each synced file and
+// records its sha256 in .harness/managed.json. True only when every engine file changed matches its recorded hash,
+// managed.json itself changed, and nothing engine-owned was deleted.
+export const MANAGED = '.harness/managed.json';
+export function isHubSync({ changed, deleted = [], managed, hashOf }) {
+  const engine = changed.filter(isEngineFile);
+  if (engine.length === 0 || deleted.some(isEngineFile)) return false;
+  if (!changed.includes(MANAGED) || !managed || typeof managed.files !== 'object') return false;
+  return engine.every((file) => file === MANAGED
+    || (managed.files[file] !== undefined && managed.files[file] === hashOf(file)));
+}
 
 // `git diff --name-status -M` output -> changed paths and deleted paths (a rename deletes its old path)
 export function parseNameStatus(text) {
@@ -71,7 +84,7 @@ export function parseDiff(text) {
 }
 
 // Pure check. Inputs come from git (see main) or from tests.
-export function analyze({ changed, deleted = [], diff = new Map(), progress = '', strict = false }) {
+export function analyze({ changed, deleted = [], diff = new Map(), progress = '', strict = false, hubSync = false }) {
   const problems = [];
   const notes = [];
   let tripwireFired = false;
@@ -87,10 +100,14 @@ export function analyze({ changed, deleted = [], diff = new Map(), progress = ''
   }
   for (const file of deleted) { problems.push(`Red tripwire (file deleted): ${file}`); tripwireFired = true; }
 
-  for (const file of touched) {
-    if (!isEngineFile(file)) continue;
-    if (strict) problems.push(`Spoke changed an engine file, which the hub owns: ${file}`);
-    else notes.push(`Engine file changed: ${file}. Confirm this is intended.`);
+  if (hubSync && touched.some(isEngineFile)) {
+    notes.push('Hub sync: every engine file change matches its hash in .harness/managed.json.');
+  } else {
+    for (const file of touched) {
+      if (!isEngineFile(file)) continue;
+      if (strict) problems.push(`Spoke changed an engine file, which the hub owns: ${file}`);
+      else notes.push(`Engine file changed: ${file}. Confirm this is intended.`);
+    }
   }
 
   // Scope rule: while exactly one slice is [IN_PROGRESS], only its Target files (and .spec/) may change.
@@ -251,7 +268,15 @@ function main(argv) {
 
   const { changed, deleted } = parseNameStatus(nameStatus);
   const diff = parseDiff(diffText);
-  const result = analyze({ changed, deleted, diff, progress, strict });
+  // Hashes are read from the checked-out head, which is what CI is verifying.
+  let managed = null;
+  try { managed = JSON.parse(fs.readFileSync(path.join(root, MANAGED), 'utf8')); } catch { /* no manifest: not a sync */ }
+  const hashOf = (file) => {
+    try { return crypto.createHash('sha256').update(fs.readFileSync(path.join(root, file))).digest('hex'); }
+    catch { return null; }
+  };
+  const hubSync = strict && isHubSync({ changed, deleted, managed, hashOf });
+  const result = analyze({ changed, deleted, diff, progress, strict, hubSync });
 
   const verdict = formatJsonVerdict({
     changed,
