@@ -66,11 +66,66 @@ Then open <http://127.0.0.1:3000> in your browser. The dashboard only listens on
 
 Some notes mention Google Antigravity, Google AI Studio, or Gemini. Those are other AI tools the harness can hand a task to. They are optional, and the core harness does not depend on them.
 
+## Architecture: Elephant, Falcon, Goldfish
+
+The harness splits work across three tiers of agents. They differ in how much context each one carries and how long it lives. Routine bookkeeping goes to Node.js scripts, which cost no model tokens.
+
+```text
+                       TIER 2: THE FALCON (fa)
+              [Main session coordinator, mid-tier model]
+           Reads only the Context Atlas and dispatches work
+                                  │
+        ┌─────────────────────────┼─────────────────────────┐
+        ▼ (on demand)             ▼ (one per slice)         ▼ (slice boundary)
+  TIER 1: THE ELEPHANT      TIER 3: GOLDFISH SQUAD    THE NAVIGATOR ENGINE
+     (el-architect)           (gf-coder / gf-*)         (navigator.mjs)
+   Flagship-model subagent    Fast-model subagents      Node.js script
+   Reads the repo, writes     Bounded to the slice's    Archives finished slices,
+   the plan, then exits       Target files              enforces line budgets
+```
+
+- **Falcon (`fa`, main session):** Follows `AGENTS.md`. For small fixes it has a fast-path budget of 3 source reads, 1 search and a single-file edit of up to 25 lines (`fa_fast_path` in `.harness/config/thresholds.json`). It delegates anything larger.
+- **Elephant (`el-architect`):** A subagent the Falcon starts on demand. It reads the repo, updates `.spec/`, and writes small slices with their target files to `.spec/PROGRESS.md`. It can only exit once `.harness/hooks/el-exit-gate.mjs` passes, and its context is discarded when it finishes.
+- **Goldfish (`gf-*`):** Short-lived subagents. `gf-coder` builds one slice and may edit only that slice's target files. `gf-verifier` runs the quiet checks and the PR scope check. `gf-navigator` compresses `.spec/` files that go over their line caps. `gf-clerk` updates the handoff file and the Referee trailers.
+
+The canonical agent definitions live in `.harness/agents/`. `hub-sync.mjs` compiles them into `.claude/agents/`, `.agents/` and `.harness/agents/runtime-payloads.json`.
+
+### The Context Atlas
+
+Each file the agents read has a numbered coordinate. A slice in `.spec/PROGRESS.md` lists the coordinates it needs, so an agent opens only those files and does not have to search the repo. `.spec/ATLAS.md` is the index.
+
+| Sector | Files |
+| --- | --- |
+| `000` Compass | `AGENTS.md`, `CLAUDE.md` (a shim that loads `AGENTS.md`) |
+| `100` Work logs | `.spec/PROGRESS.md` (110), `.spec/archive/HISTORY.md` (120), `.spec/BLACK_BOX.md` (130, only after a failure) |
+| `200` Boundaries | `.spec/boundaries/locks.md` (210), `.spec/boundaries/do-not-build.md` (220) |
+| `300` Contracts | `.harness/config/thresholds.json` (305), referee (310), circuit breaker (320), baton pass (330), review relay (340) |
+| `400` System spec | `.spec/SYSTEM_SPEC.md` |
+
+Every file in the Atlas has a soft line cap in `thresholds.json`. `npm run lint` reports any file that goes over its cap.
+
+### Guardrails
+
+- **Hook adapter (`.harness/hooks/adapter.mjs`):** Converts tool calls from Claude Code (`.claude/settings.json`) and Antigravity (`.agents/hooks.json`) into one format, so both tools run the same guard scripts.
+- **Two-strike circuit breaker (`freeze-black-box.mjs`):** If `gf-coder` makes 2 exploratory searches or fails its tests twice, the script writes the diff and the error output to `.spec/BLACK_BOX.md`. It then stashes the changes as `black-box/<slice-id>` and hands the slice back to `el-architect`.
+- **Finishing a slice (`finish-slice.mjs`, `navigator.mjs`, `referee.mjs`):** Checks that the changes stayed within the slice's scope and adds Referee trailers to the commit: the verdict, the tree, and a SHA-256 hash of the engine. It then moves the finished slice to `HISTORY.md` and marks the next pending slice as in progress, all in one commit.
+
+### Slice commands
+
+```bash
+node .harness/scripts/hub-sync.mjs                 # regenerate agent definitions
+node .harness/scripts/start-slice.mjs "Slice X.Y"  # anchor a new milestone's first slice
+node .harness/scripts/finish-slice.mjs "<msg>"     # verify, commit, archive, advance
+node .harness/scripts/navigator.mjs --check        # Atlas link and line-budget check
+node .harness/scripts/pr-scope-check.mjs           # PR scope gate
+```
+
 ## Status
 
 This is an early-stage project, built by one developer working with AI agents. `.spec/OVERVIEW.md` lists what has been tested live and what has not. Known gaps:
 
 - The `version` field in `package.json` still says 2.2.0, while the engine version is 3.2.0.
+- The contract files for referee (310), circuit breaker (320), and review relay (340) are listed in the Atlas but do not exist yet. Only `.spec/contracts/baton-pass.md` is present.
 - The repository has no `package-lock.json`, so `npm install` may resolve slightly different dependency versions over time.
 
 ## Security
