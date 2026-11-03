@@ -220,8 +220,21 @@ test('goldfish target locks block editing files outside active slice Target file
   assert.equal(blocked.allowed, false);
   assert.match(blocked.reason, /SCOPE LOCK BLOCK/);
 
-  // PROGRESS.md is always permitted for progress updates
-  assert.equal(checkTargetFileScope({ relTarget: '.spec/PROGRESS.md', allowedTargets: allowed, role: 'goldfish' }).allowed, true);
+  // Hard State-File Lockout: gf-coder cannot touch PROGRESS.md, ATLAS.md, or HISTORY.md even if allowed
+  const blockedProgress = checkTargetFileScope({ relTarget: '.spec/PROGRESS.md', allowedTargets: allowed, role: 'goldfish' });
+  assert.equal(blockedProgress.allowed, false);
+  assert.match(blockedProgress.reason, /DENIED: gf-coder cannot modify \.spec\/PROGRESS\.md or Atlas state files/);
+
+  const blockedAtlas = checkTargetFileScope({ relTarget: '.spec/ATLAS.md', allowedTargets: allowed, role: 'goldfish' });
+  assert.equal(blockedAtlas.allowed, false);
+  assert.match(blockedAtlas.reason, /DENIED: gf-coder cannot modify \.spec\/PROGRESS\.md or Atlas state files/);
+
+  const blockedHistory = checkTargetFileScope({ relTarget: '.spec/archive/HISTORY.md', allowedTargets: allowed, role: 'goldfish' });
+  assert.equal(blockedHistory.allowed, false);
+  assert.match(blockedHistory.reason, /DENIED: gf-coder cannot modify \.spec\/PROGRESS\.md or Atlas state files/);
+
+  // Non-goldfish roles (e.g., coordinator) are permitted to update PROGRESS.md
+  assert.equal(checkTargetFileScope({ relTarget: '.spec/PROGRESS.md', allowedTargets: allowed, role: 'coordinator' }).allowed, true);
 });
 
 test('role resolution identifies subagents vs coordinator', () => {
@@ -273,3 +286,19 @@ test('el exit gate blocks progress file with no declared slices', () => {
   assert.equal(result.valid, false);
   assert.match(result.errors[0], /No declared slices found/);
 });
+
+test('el exit gate blocks slices targeting .spec/PROGRESS.md via canonical validator', () => {
+  const badTargetProgress = `- [ ] **Slice 3.1: Hack** Target files: src/app.js, .spec/PROGRESS.md | Coords: [110] | Verify: npm test\n`;
+  const result = validateProgressSlices(badTargetProgress);
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((e) => e.includes('Coding slice target files must not include .spec/PROGRESS.md')));
+});
+
+test('el exit gate blocks slices citing invalid Coords when Context Atlas content is provided', () => {
+  const badCoordsProgress = `- [ ] **Slice 3.2: Bad Coords** Target files: src/app.js | Coords: [999] | Verify: npm test\n`;
+  const atlas = `# Context Atlas\n- \`110\` [.spec/PROGRESS.md](.spec/PROGRESS.md)\n`;
+  const result = validateProgressSlices(badCoordsProgress, atlas);
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((e) => e.includes('Coordinate 999 does not exist in Context Atlas')));
+});
+

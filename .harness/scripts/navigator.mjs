@@ -2,10 +2,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { ensureHarnessRoot, atomicWriteFileSync } from './lib/fs-atomic.mjs';
 
 export const ATLAS_COORDS_REGEX = /\|\s*Coords:\s*\[([0-9,\s]+)\]/;
 
 export function resolveRoot() {
+  ensureHarnessRoot();
   return process.env.CLAUDE_PROJECT_DIR || process.cwd();
 }
 
@@ -229,8 +231,8 @@ export function archiveCompletedSlices(root) {
     historyText += `${sliceLine.trim()}\n`;
   }
 
-  fs.writeFileSync(historyPath, historyText, 'utf8');
-  fs.writeFileSync(progressPath, remaining.join('\n'), 'utf8');
+  atomicWriteFileSync(historyPath, historyText, 'utf8');
+  atomicWriteFileSync(progressPath, remaining.join('\n'), 'utf8');
 
   return { archived: completed.length, remaining: remaining.length };
 }
@@ -259,6 +261,7 @@ export function navigatorCheck(root) {
 export const librarianCheck = navigatorCheck;
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  ensureHarnessRoot();
   const root = resolveRoot();
   const args = process.argv.slice(2);
 

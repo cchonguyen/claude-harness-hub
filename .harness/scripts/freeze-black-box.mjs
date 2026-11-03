@@ -4,6 +4,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { appendBatchEvent, resolveRoot } from './status-batch.mjs';
+import { ensureHarnessRoot, atomicWriteFileSync } from './lib/fs-atomic.mjs';
 
 const gitIn = (cwd, args) => {
   try {
@@ -14,6 +15,7 @@ const gitIn = (cwd, args) => {
 };
 
 export function freezeBlackBox(root, reason = 'Circuit breaker Strike 2 triggered.') {
+  ensureHarnessRoot();
   const progressPath = path.join(root, '.spec', 'PROGRESS.md');
   const blackBoxPath = path.join(root, '.spec', 'BLACK_BOX.md');
 
@@ -102,7 +104,7 @@ ${gitDiff || '(no diff)'}
 \`\`\`
 `;
 
-  fs.writeFileSync(blackBoxPath, blackBoxContent, 'utf8');
+  atomicWriteFileSync(blackBoxPath, blackBoxContent, 'utf8');
 
   // Record batch event
   try {
@@ -131,6 +133,7 @@ ${gitDiff || '(no diff)'}
 export const freezeCrimeScene = freezeBlackBox;
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  ensureHarnessRoot();
   const root = resolveRoot();
   const reason = process.argv.slice(2).join(' ').trim() || 'Circuit breaker Strike 2 triggered.';
   try {

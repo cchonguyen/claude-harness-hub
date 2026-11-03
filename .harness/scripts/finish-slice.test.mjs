@@ -4,7 +4,8 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { finishSlice } from './finish-slice.mjs';
+import { finishSlice, parseActiveTargets } from './finish-slice.mjs';
+import { startSlice } from './start-slice.mjs';
 import { verifyHeadTrust } from './referee.mjs';
 
 function makeRepo() {
@@ -181,6 +182,164 @@ test('finishSlice fails closed when slice exists only in working copy and not in
   assert.throws(
     () => finishSlice(dir, 'feat: finish uncommitted slice', { skipChecks: true }),
     /Scope neutrality violation: Slice 2 does not exist in HEAD:\.spec\/PROGRESS\.md/
+  );
+
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('finishSlice single-commit auto-advance promotes next pending slice to [IN_PROGRESS]', () => {
+  const dir = makeRepo();
+  const git = (...args) => execFileSync('git', args, { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+
+  fs.mkdirSync(path.join(dir, '.spec'), { recursive: true });
+  fs.mkdirSync(path.join(dir, '.harness', 'scripts'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.harness', 'scripts', 'referee.mjs'), '// referee');
+  fs.writeFileSync(path.join(dir, '.spec', 'SESSION_HANDOFF.md'), '**Active Slice:** Slice 1\n**Verification Status:** pending\n');
+  fs.writeFileSync(
+    path.join(dir, '.spec', 'PROGRESS.md'),
+    '# Progress\n' +
+    '- [ ] **Slice 1: First** [IN_PROGRESS] Target files: a.txt | Coords: [110] | Verify: npm test\n' +
+    '- [ ] **Slice 2: Second** [PENDING] Target files: b.txt | Coords: [110] | Verify: npm test\n' +
+    '- [ ] **Slice 3: Third** Target files: c.txt | Coords: [110] | Verify: npm test\n'
+  );
+  fs.writeFileSync(path.join(dir, 'a.txt'), 'a content');
+  fs.writeFileSync(path.join(dir, 'b.txt'), 'b content');
+  fs.writeFileSync(path.join(dir, 'c.txt'), 'c content');
+
+  git('add', '-A');
+  git('commit', '-m', 'init slices');
+
+  // Modify a.txt for slice 1
+  fs.writeFileSync(path.join(dir, 'a.txt'), 'a updated');
+
+  const res = finishSlice(dir, 'feat: finish slice 1 with auto-advance', { skipChecks: true });
+  assert.equal(res.success, true);
+  assert.equal(res.sliceId, '1');
+  assert.equal(res.nextSliceId, '2');
+
+  // Verify PROGRESS.md in working tree & HEAD
+  const progressText = fs.readFileSync(path.join(dir, '.spec', 'PROGRESS.md'), 'utf8');
+  assert.match(progressText, /- \[x\] \*\*Slice 1: First\*\*/);
+  assert.match(progressText, /- \[ \] \*\*Slice 2: Second\*\* \[IN_PROGRESS\]/);
+  assert.match(progressText, /- \[ \] \*\*Slice 3: Third\*\*/);
+  assert.doesNotMatch(progressText, /\*\*Slice 3: Third\*\* \[IN_PROGRESS\]/);
+
+  // Check HEAD commit has both changes
+  const headProgress = git('show', 'HEAD:.spec/PROGRESS.md');
+  assert.match(headProgress, /- \[x\] \*\*Slice 1: First\*\*/);
+  assert.match(headProgress, /- \[ \] \*\*Slice 2: Second\*\* \[IN_PROGRESS\]/);
+
+  // Check SESSION_HANDOFF.md
+  const handoffText = fs.readFileSync(path.join(dir, '.spec', 'SESSION_HANDOFF.md'), 'utf8');
+  assert.match(handoffText, /\*\*Active Slice:\*\* Slice 2/);
+
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('finishSlice handles last slice completion without auto-advance', () => {
+  const dir = makeRepo();
+  const git = (...args) => execFileSync('git', args, { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+
+  fs.mkdirSync(path.join(dir, '.spec'), { recursive: true });
+  fs.mkdirSync(path.join(dir, '.harness', 'scripts'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.harness', 'scripts', 'referee.mjs'), '// referee');
+  fs.writeFileSync(path.join(dir, '.spec', 'SESSION_HANDOFF.md'), '**Active Slice:** Slice 1\n');
+  fs.writeFileSync(
+    path.join(dir, '.spec', 'PROGRESS.md'),
+    '# Progress\n- [ ] **Slice 1: Final** [IN_PROGRESS] Target files: a.txt | Coords: [110] | Verify: npm test\n'
+  );
+  fs.writeFileSync(path.join(dir, 'a.txt'), 'a content');
+
+  git('add', '-A');
+  git('commit', '-m', 'init last slice');
+
+  fs.writeFileSync(path.join(dir, 'a.txt'), 'a finished');
+
+  const res = finishSlice(dir, 'feat: finish final slice', { skipChecks: true });
+  assert.equal(res.success, true);
+  assert.equal(res.sliceId, '1');
+  assert.equal(res.nextSliceId, null);
+
+  const progressText = fs.readFileSync(path.join(dir, '.spec', 'PROGRESS.md'), 'utf8');
+  assert.match(progressText, /- \[x\] \*\*Slice 1: Final\*\*/);
+  assert.doesNotMatch(progressText, /\[IN_PROGRESS\]/);
+
+  const handoffText = fs.readFileSync(path.join(dir, '.spec', 'SESSION_HANDOFF.md'), 'utf8');
+  assert.match(handoffText, /\*\*Active Slice:\*\* none/);
+
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('finishSlice git staging filters gitignored tracking files and succeeds', () => {
+  const dir = makeRepo();
+  const git = (...args) => execFileSync('git', args, { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+
+  fs.mkdirSync(path.join(dir, '.spec'), { recursive: true });
+  fs.mkdirSync(path.join(dir, '.harness', 'scripts'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.harness', 'scripts', 'referee.mjs'), '// referee');
+  fs.writeFileSync(path.join(dir, '.spec', 'SESSION_HANDOFF.md'), '**Active Slice:** Slice 1\n');
+  fs.writeFileSync(
+    path.join(dir, '.spec', 'PROGRESS.md'),
+    '# Progress\n- [ ] **Slice 1** [IN_PROGRESS] Target files: a.txt | Coords: [110] | Verify: npm test\n'
+  );
+  fs.writeFileSync(path.join(dir, 'a.txt'), 'a initial');
+
+  // Gitignore tracking files
+  fs.writeFileSync(path.join(dir, '.gitignore'), '.spec/.session-telemetry.json\n.spec/STATUS_BATCH.jsonl\n');
+
+  git('add', '-A');
+  git('commit', '-m', 'init with gitignore');
+
+  // Modify a.txt and write telemetry file that matches .gitignore
+  fs.writeFileSync(path.join(dir, 'a.txt'), 'a modified');
+  fs.writeFileSync(path.join(dir, '.spec', '.session-telemetry.json'), JSON.stringify({ slicesCommitted: 0 }));
+
+  const res = finishSlice(dir, 'feat: finish with ignored telemetry', { skipChecks: true });
+  assert.equal(res.success, true);
+  assert.equal(res.sliceId, '1');
+
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('parseActiveTargets extracts targets using shared slice parser', () => {
+  const line = '- [ ] **Slice 6.1: Test** [IN_PROGRESS] Target files: `foo.js`, `[NEW] bar.js`, `[DELETE] baz.js` | Coords: [110] | Verify: npm test';
+  const targets = parseActiveTargets(line);
+  assert.deepEqual(targets, ['foo.js', 'bar.js', 'baz.js']);
+});
+
+test('startSlice anchors the first pending slice or specified slice in HEAD', () => {
+  const dir = makeRepo();
+  const git = (...args) => execFileSync('git', args, { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+
+  fs.mkdirSync(path.join(dir, '.spec'), { recursive: true });
+  fs.writeFileSync(
+    path.join(dir, '.spec', 'PROGRESS.md'),
+    '# Progress\n' +
+    '- [ ] **Slice 6.1: First Slice** [PENDING] Target files: a.txt | Coords: [110] | Verify: npm test\n' +
+    '- [ ] **Slice 6.2: Second Slice** Target files: b.txt | Coords: [110] | Verify: npm test\n'
+  );
+  git('add', '-A');
+  git('commit', '-m', 'plan milestone 6');
+
+  // Anchor first pending slice
+  const res = startSlice(dir, '6.1');
+  assert.equal(res.success, true);
+  assert.equal(res.sliceId, '6.1');
+  assert.equal(res.sliceLabel, 'Slice 6.1');
+  assert.equal(res.commitMsg, 'docs(spec): anchor Slice 6.1 [IN_PROGRESS]');
+
+  // Verify PROGRESS.md was updated
+  const progressText = fs.readFileSync(path.join(dir, '.spec', 'PROGRESS.md'), 'utf8');
+  assert.match(progressText, /- \[ \] \*\*Slice 6.1: First Slice\*\* \[IN_PROGRESS\]/);
+
+  // Verify HEAD commit
+  const headCommit = git('log', '-1', '--pretty=%B');
+  assert.match(headCommit, /docs\(spec\): anchor Slice 6.1 \[IN_PROGRESS\]/);
+
+  // Calling startSlice again while a slice is [IN_PROGRESS] throws
+  assert.throws(
+    () => startSlice(dir, '6.2'),
+    /is already \[IN_PROGRESS\]/
   );
 
   fs.rmSync(dir, { recursive: true, force: true });

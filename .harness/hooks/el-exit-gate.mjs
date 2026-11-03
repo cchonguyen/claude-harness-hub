@@ -6,10 +6,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolveRoot } from './lib/vibe.mjs';
+import { validateSliceLine } from '../scripts/lib/slice-parser.mjs';
 
 export const ATLAS_COORDS_REGEX = /\|\s*Coords:\s*\[([0-9,\s]+)\]/;
 
-export function validateProgressSlices(progressContent) {
+export function validateProgressSlices(progressContent, atlasContent) {
   const errors = [];
   const lines = progressContent.split('\n');
 
@@ -23,6 +24,7 @@ export function validateProgressSlices(progressContent) {
     if (match) {
       slices.push({
         lineNum: i + 1,
+        line,
         isCompleted: match[1].toLowerCase() === 'x',
         sliceId: match[2].trim(),
         title: (match[3] || '').trim(),
@@ -72,6 +74,14 @@ export function validateProgressSlices(progressContent) {
         errors.push(`${label}: "Verify:" command is empty.`);
       }
     }
+
+    // 4. Canonical slice validation (no .spec/PROGRESS.md in targets, coords exist in atlas)
+    const sliceRes = validateSliceLine(slice.line, atlasContent);
+    if (!sliceRes.valid) {
+      for (const err of sliceRes.errors) {
+        errors.push(`${label}: ${err}`);
+      }
+    }
   }
 
   return {
@@ -116,8 +126,11 @@ if (isDirectRun) {
     process.exit(2);
   }
 
+  const atlasPath = path.join(root, '.spec', 'ATLAS.md');
+  const atlasContent = fs.existsSync(atlasPath) ? fs.readFileSync(atlasPath, 'utf8') : '';
+
   const content = fs.readFileSync(progressPath, 'utf8');
-  const result = validateProgressSlices(content);
+  const result = validateProgressSlices(content, atlasContent);
 
   if (!result.valid) {
     console.error('EL EXIT GATE BLOCK: Validation failed for .spec/PROGRESS.md:');
