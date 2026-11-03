@@ -1,0 +1,40 @@
+{
+  "PreToolUse": [
+    {
+      "matcher": ".*",
+      "command": "node .harness/hooks/adapter.mjs pre-tool-guard.mjs"
+    }
+  ],
+  "PostToolUse": [
+    {
+      "matcher": ".*",
+      "command": "node .harness/hooks/adapter.mjs post-tool-scrub.mjs"
+    }
+  ],
+  "SubagentStop": [
+    {
+      "matcher": ".*",
+      "command": "node .harness/hooks/adapter.mjs elephant-exit-gate.mjs"
+    }
+  ],
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": ".*",
+        "command": "node .harness/hooks/adapter.mjs pre-tool-guard.mjs"
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": ".*",
+        "command": "node .harness/hooks/adapter.mjs post-tool-scrub.mjs"
+      }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": ".*",
+        "command": "node .harness/hooks/adapter.mjs elephant-exit-gate.mjs"
+      }
+    ]
+  }
+}

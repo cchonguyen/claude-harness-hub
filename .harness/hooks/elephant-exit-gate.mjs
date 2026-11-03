@@ -1,0 +1,131 @@
+#!/usr/bin/env node
+// SubagentStop Exit Gate for Tier 1 Elephant
+// Verifies .spec/PROGRESS.md has valid Target files:, valid Refs:, and a Verify: command for every slice.
+
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { resolveRoot } from './lib/vibe.mjs';
+
+export function validateProgressSlices(progressContent) {
+  const errors = [];
+  const lines = progressContent.split('\n');
+
+  // Match slices: - [ ] **Slice X... or - [x] **Slice X...
+  const sliceRegex = /^\s*-\s*\[([ xX])\]\s*\*\*Slice\s+([^:*]+)(?::\s*([^*]+))?\*\*(.*)$/;
+
+  const slices = [];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const match = line.match(sliceRegex);
+    if (match) {
+      slices.push({
+        lineNum: i + 1,
+        isCompleted: match[1].toLowerCase() === 'x',
+        sliceId: match[2].trim(),
+        title: (match[3] || '').trim(),
+        rest: match[4] || ''
+      });
+    }
+  }
+
+  if (slices.length === 0) {
+    errors.push('No declared slices found in .spec/PROGRESS.md.');
+    return { valid: false, errors, slicesCount: 0 };
+  }
+
+  for (const slice of slices) {
+    const label = `Slice ${slice.sliceId}`;
+
+    // 1. Target files:
+    const targetMatch = slice.rest.match(/Target files:\s*([^|\n]+)/i);
+    if (!targetMatch) {
+      errors.push(`${label}: Missing "Target files:" declaration.`);
+    } else {
+      const targetStr = targetMatch[1].replace(/[`*]/g, '').trim();
+      const targets = targetStr.split(',').map((t) => t.trim()).filter(Boolean);
+      if (targets.length === 0) {
+        errors.push(`${label}: "Target files:" declaration is empty.`);
+      }
+    }
+
+    // 2. Refs:
+    const refsMatch = slice.rest.match(/Refs:\s*(\[[^\]]+\]|[^|\n]+)/i);
+    if (!refsMatch) {
+      errors.push(`${label}: Missing "Refs:" declaration.`);
+    } else {
+      const refsStr = refsMatch[1].replace(/[[\]`]/g, '').trim();
+      if (!refsStr) {
+        errors.push(`${label}: "Refs:" declaration is empty.`);
+      }
+    }
+
+    // 3. Verify:
+    const verifyMatch = slice.rest.match(/Verify:\s*([^|\n]+)/i);
+    if (!verifyMatch) {
+      errors.push(`${label}: Missing "Verify:" command.`);
+    } else {
+      const verifyCmd = verifyMatch[1].trim();
+      if (!verifyCmd) {
+        errors.push(`${label}: "Verify:" command is empty.`);
+      }
+    }
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors,
+    slicesCount: slices.length
+  };
+}
+
+// CLI Execution Entry Point
+const isDirectRun = process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
+if (isDirectRun) {
+  let event = {};
+  if (!process.stdin.isTTY) {
+    try {
+      event = JSON.parse(fs.readFileSync(0, 'utf8'));
+    } catch {}
+  }
+
+  const agent = String(
+    event.agent ||
+    event.subagent_type ||
+    event.subagent ||
+    event.name ||
+    process.env.HARNESS_ROLE ||
+    process.env.CLAUDE_AGENT ||
+    ''
+  ).toLowerCase();
+
+  // If invoked with a known non-elephant subagent, pass through
+  if (agent && !agent.includes('elephant') && !agent.includes('architect')) {
+    process.exit(0);
+  }
+
+  const root = resolveRoot();
+  const progressPath = process.argv[2] && !process.argv[2].startsWith('-')
+    ? path.resolve(process.argv[2])
+    : path.join(root, '.spec', 'PROGRESS.md');
+
+  if (!fs.existsSync(progressPath)) {
+    console.error('ELEPHANT EXIT GATE BLOCK: .spec/PROGRESS.md not found.');
+    process.exit(2);
+  }
+
+  const content = fs.readFileSync(progressPath, 'utf8');
+  const result = validateProgressSlices(content);
+
+  if (!result.valid) {
+    console.error('ELEPHANT EXIT GATE BLOCK: Validation failed for .spec/PROGRESS.md:');
+    for (const err of result.errors) {
+      console.error(`- ${err}`);
+    }
+    console.error('All slices declared by Tier 1 Elephant must specify Target files, Refs, and a Verify command.');
+    process.exit(2);
+  }
+
+  console.log('ELEPHANT EXIT GATE PASS: All declared slices in .spec/PROGRESS.md have valid Target files, Refs, and Verify commands.');
+  process.exit(0);
+}

@@ -33,11 +33,11 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "Agent|Task|Edit|Write|NotebookEdit",
+        "matcher": "Agent|Task|Edit|Write|NotebookEdit|Read|View|Grep|Glob",
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PROJECT_DIR:-.}/.harness/hooks/pre-tool-guard.mjs\""
+            "command": "node \"${CLAUDE_PROJECT_DIR:-.}/.harness/hooks/adapter.mjs\" pre-tool-guard.mjs"
           }
         ]
       },
@@ -46,7 +46,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PROJECT_DIR:-.}/.harness/hooks/bash-guard.mjs\""
+            "command": "node \"${CLAUDE_PROJECT_DIR:-.}/.harness/hooks/adapter.mjs\" bash-guard.mjs"
           }
         ]
       }
@@ -57,7 +57,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PROJECT_DIR:-.}/.harness/hooks/post-tool-scrub.mjs\""
+            "command": "node \"${CLAUDE_PROJECT_DIR:-.}/.harness/hooks/adapter.mjs\" post-tool-scrub.mjs"
           }
         ]
       }
@@ -68,7 +68,17 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PROJECT_DIR:-.}/.harness/hooks/post-tool-failure.mjs\""
+            "command": "node \"${CLAUDE_PROJECT_DIR:-.}/.harness/hooks/adapter.mjs\" post-tool-failure.mjs"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR:-.}/.harness/hooks/adapter.mjs\" elephant-exit-gate.mjs"
           }
         ]
       }
