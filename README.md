@@ -96,13 +96,13 @@ Each file the agents read has a numbered coordinate. A slice in `.spec/PROGRESS.
 
 | Sector | Files |
 | --- | --- |
-| `000` Compass | `AGENTS.md`, `CLAUDE.md` (a shim that loads `AGENTS.md`) |
+| `000` Card Catalog | `AGENTS.md` (010), `CLAUDE.md` (a shim that loads `AGENTS.md`) |
 | `100` Work logs | `.spec/PROGRESS.md` (110), `.spec/archive/HISTORY.md` (120), `.spec/BLACK_BOX.md` (130, only after a failure) |
 | `200` Boundaries | `.spec/boundaries/locks.md` (210), `.spec/boundaries/do-not-build.md` (220) |
 | `300` Contracts | `.harness/config/thresholds.json` (305), referee (310), circuit breaker (320), baton pass (330), review relay (340) |
 | `400` System spec | `.spec/SYSTEM_SPEC.md` |
 
-Every file in the Atlas has a soft line cap in `thresholds.json`. `npm run lint` reports any file that goes over its cap.
+Most Atlas files have a soft line cap in `thresholds.json`. `npm run lint` reports any file that goes over its cap. The full definition, including the staleness rule, is in [docs/CONTEXT_ATLAS.md](docs/CONTEXT_ATLAS.md).
 
 ### Guardrails
 
@@ -125,7 +125,6 @@ node .harness/scripts/pr-scope-check.mjs           # PR scope gate
 This is an early-stage project, built by one developer working with AI agents. `.spec/OVERVIEW.md` lists what has been tested live and what has not. Known gaps:
 
 - The `version` field in `package.json` still says 2.2.0, while the engine version is 3.2.0.
-- The contract files for referee (310), circuit breaker (320), and review relay (340) are listed in the Atlas but do not exist yet. Only `.spec/contracts/baton-pass.md` is present.
 - The repository has no `package-lock.json`, so `npm install` may resolve slightly different dependency versions over time.
 
 ## Security

@@ -16,6 +16,7 @@ Your mission is to coordinate work with minimal context bloat. Do NOT explore ra
 - Scope & PR Gate: `node .harness/scripts/pr-scope-check.mjs`
 
 ## 3. Context Atlas Sectors (`000–400`) (Read On-Demand Only)
+Full definition and rules: `docs/CONTEXT_ATLAS.md`.
 - `000` Card Catalog: `AGENTS.md` (Universal) & `CLAUDE.md` (Shim)
 - `100` Work Dispatch: `.spec/PROGRESS.md` (110), `.spec/archive/HISTORY.md` (120), `.spec/BLACK_BOX.md` (130)
 - `200` Boundaries: `.spec/boundaries/locks.md` (210), `.spec/boundaries/do-not-build.md` (220)
