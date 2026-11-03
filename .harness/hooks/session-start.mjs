@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { activeLines, ensureBaseline, resolveRoot } from './lib/vibe.mjs';
-import { branchOwnerOf, mainRedState, MAIN_RED_TAG } from './lib/session-signals.mjs';
+import { branchOwnerOf, mainRedState, MAIN_RED_TAG, whereWeLeftOff } from './lib/session-signals.mjs';
 import { readBatchEvents } from '../scripts/status-batch.mjs';
 
 const root = resolveRoot();
@@ -51,6 +51,8 @@ if (fs.existsSync(handoffPath)) {
   const handoff = fs.readFileSync(handoffPath, 'utf8').trim();
   const fromAiStudio = /Last Active Platform:\**\s*Google AI Studio/i.test(handoff);
   const owner = branchOwnerOf(handoff);
+  const resume = whereWeLeftOff(handoff);
+  if (resume) contextMsg += `\n${resume}`;
   if (owner) {
     contextMsg += `\n\nBranch Owner: ${owner}. ${owner === 'antigravity' ? 'Claude must not push to this branch; open a new branch or comment on the PR.' : 'Claude owns this branch.'}`;
   }
