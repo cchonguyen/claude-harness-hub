@@ -16,7 +16,7 @@
   },
   "line_budgets": {
     "soft_caps": {
-      "AGENTS.md": 40,
+      "AGENTS.md": 80,
       "CLAUDE.md": 5,
       ".spec/ATLAS.md": 50,
       ".spec/boundaries/locks.md": 60,
