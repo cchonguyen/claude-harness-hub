@@ -35,6 +35,20 @@ export const isTestFile = (file) => TEST_FILE.test(file);
 export const isEngineFile = (file) =>
   !SPOKE_OWNED.has(file) && (file.startsWith('.claude/') || file.startsWith('.harness/') || file === '.harness-version');
 
+export function parseActiveTargets(line) {
+  if (!line) return [];
+  const targetPart = line.split('|')[0];
+  const match = targetPart.match(/Target files:\s*([^\n]+)/i);
+  if (!match) return [];
+  return match[1]
+    .replace(/\[NEW\]/gi, '')
+    .replace(/\[IN_PROGRESS\]/gi, '')
+    .replace(/[`*]/g, '')
+    .split(',')
+    .map((s) => s.trim().replace(/^\.\//, ''))
+    .filter(Boolean);
+}
+
 // `git diff --name-status -M` output -> changed paths and deleted paths (a rename deletes its old path)
 export function parseNameStatus(text) {
   const changed = [];
@@ -71,7 +85,16 @@ export function parseDiff(text) {
 }
 
 // Pure check. Inputs come from git (see main) or from tests.
-export function analyze({ changed, deleted = [], diff = new Map(), progress = '', strict = false }) {
+export function analyze({
+  changed,
+  deleted = [],
+  diff = new Map(),
+  progress = '',
+  strict = false,
+  root = process.env.CLAUDE_PROJECT_DIR || process.cwd(),
+  thresholds = null,
+  fileContents = null,
+}) {
   const problems = [];
   const notes = [];
   let tripwireFired = false;
@@ -111,8 +134,7 @@ export function analyze({ changed, deleted = [], diff = new Map(), progress = ''
   if (sliceLines.length > 0) {
     sliceType = sliceLines.some((l) => l.match(SLICE_TYPE)?.[1] === 'CORE / DATA') ? 'CORE / DATA'
       : sliceLines.map((l) => l.match(SLICE_TYPE)?.[1]).find(Boolean) ?? null;
-    const targets = sliceLines.flatMap((l) => (l.match(/Target files:\s*(.+)$/i)?.[1] || '')
-      .replace(/[`*]/g, '').split(',').map((s) => s.trim().replace(/^\.\//, '')).filter(Boolean));
+    const targets = sliceLines.flatMap((l) => parseActiveTargets(l));
     // Same rule as the guard hook: exact file, or a file inside a listed folder
     const isAllowed = (file, allowed) =>
       file === allowed || file.startsWith(allowed.endsWith('/') ? allowed : `${allowed}/`);
@@ -122,6 +144,42 @@ export function analyze({ changed, deleted = [], diff = new Map(), progress = ''
     }
   } else if (active.length === 0) {
     notes.push('Vibe Mode: no slice is in progress, so the Target files rule does not apply.');
+  }
+
+  // Verify line budgets against thresholds.json if present
+  let resolvedThresholds = thresholds;
+  if (!resolvedThresholds && root) {
+    const configPath = path.join(root, '.harness', 'config', 'thresholds.json');
+    if (fs.existsSync(configPath)) {
+      try {
+        resolvedThresholds = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+      } catch {}
+    }
+  }
+
+  const softCaps = resolvedThresholds?.line_budgets?.soft_caps;
+  if (softCaps && typeof softCaps === 'object') {
+    for (const [budgetFile, maxLines] of Object.entries(softCaps)) {
+      if (touched.includes(budgetFile)) {
+        let content = null;
+        if (fileContents && fileContents.has && fileContents.has(budgetFile)) {
+          content = fileContents.get(budgetFile);
+        } else if (fileContents && budgetFile in fileContents) {
+          content = fileContents[budgetFile];
+        } else if (root) {
+          const filePath = path.join(root, budgetFile);
+          if (fs.existsSync(filePath)) {
+            try { content = fs.readFileSync(filePath, 'utf8'); } catch {}
+          }
+        }
+        if (content !== null) {
+          const lines = content.endsWith('\n') ? content.slice(0, -1).split('\n').length : content.split('\n').length;
+          if (lines > maxLines) {
+            problems.push(`Line budget exceeded: ${budgetFile} has ${lines} lines (soft cap: ${maxLines})`);
+          }
+        }
+      }
+    }
   }
 
   // Test rule. Tests must not lose assertions, and skipped or focused tests are flagged.
@@ -199,6 +257,7 @@ export function formatJsonVerdict({
       else if (msg.includes("Target files") || msg.includes("IN_PROGRESS")) type = "scope";
       else if (msg.toLowerCase().includes("test") || msg.toLowerCase().includes("assertion")) type = "test";
       else if (msg.includes("engine file")) type = "engine";
+      else if (msg.includes("Line budget")) type = "budget";
       return {
         id: `REV-${String(i + 1).padStart(3, '0')}`,
         type,
@@ -251,7 +310,7 @@ function main(argv) {
 
   const { changed, deleted } = parseNameStatus(nameStatus);
   const diff = parseDiff(diffText);
-  const result = analyze({ changed, deleted, diff, progress, strict });
+  const result = analyze({ changed, deleted, diff, progress, strict, root });
 
   const verdict = formatJsonVerdict({
     changed,

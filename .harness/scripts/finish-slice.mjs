@@ -10,9 +10,13 @@ const gitIn = (cwd, args) =>
   execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
 
 export function parseActiveTargets(line) {
-  const match = line?.match(/Target files:\s*([^[\n]+)/i);
+  if (!line) return [];
+  const targetPart = line.split('|')[0];
+  const match = targetPart.match(/Target files:\s*([^\n]+)/i);
   if (!match) return [];
   return match[1]
+    .replace(/\[NEW\]/gi, '')
+    .replace(/\[IN_PROGRESS\]/gi, '')
     .replace(/[`*]/g, '')
     .split(',')
     .map((s) => s.trim().replace(/^\.\//, ''))
@@ -131,80 +135,108 @@ export function finishSlice(root, commitMsg, options = {}) {
     }
   }
 
-  // 4. Mark slice [x] in PROGRESS.md
-  lines[activeIdx] = activeLine.replace(/\[IN_PROGRESS\]/g, '').replace(/-\s*\[\s*\]/, '- [x]').trim();
-  fs.writeFileSync(progressPath, lines.join('\n'), 'utf8');
+  // 4. Update PROGRESS.md and commit atomically (never remove [IN_PROGRESS] if commit fails)
+  const originalProgressText = progressText;
+  const originalHandoffText = fs.existsSync(handoffPath) ? fs.readFileSync(handoffPath, 'utf8') : '';
+  let committed = false;
 
-  // 5. Update SESSION_HANDOFF.md
-  const handoffText = fs.existsSync(handoffPath) ? fs.readFileSync(handoffPath, 'utf8') : '';
-  const updatedHandoff = handoffText
-    .replace(/\*\*Active Slice:\*\*.*/i, '**Active Slice:** none')
-    .replace(/\*\*Verification Status:\*\*.*/i, `**Verification Status:** Verified via finish-slice.mjs (Slice ${sliceId})`);
-  fs.writeFileSync(handoffPath, updatedHandoff, 'utf8');
+  try {
+    lines[activeIdx] = activeLine.replace(/\[IN_PROGRESS\]/g, '').replace(/-\s*\[\s*\]/, '- [x]').trim();
+    fs.writeFileSync(progressPath, lines.join('\n'), 'utf8');
 
-  // 6. Update session telemetry & batch events
-  if (fs.existsSync(telemetryPath)) {
-    try {
-      const telem = JSON.parse(fs.readFileSync(telemetryPath, 'utf8'));
-      telem.slicesCommitted = (telem.slicesCommitted || 0) + 1;
-      telem.mutatingCallsOnSlice = 0;
-      telem.currentSlice = '';
-      fs.writeFileSync(telemetryPath, JSON.stringify(telem, null, 2), 'utf8');
-    } catch {}
+    // 5. Update SESSION_HANDOFF.md
+    const handoffText = originalHandoffText;
+    const updatedHandoff = handoffText
+      .replace(/\*\*Active Slice:\*\*.*/i, '**Active Slice:** none')
+      .replace(/\*\*Verification Status:\*\*.*/i, `**Verification Status:** Verified via finish-slice.mjs (Slice ${sliceId})`);
+    fs.writeFileSync(handoffPath, updatedHandoff, 'utf8');
+
+    // 6. Update session telemetry & batch events
+    if (fs.existsSync(telemetryPath)) {
+      try {
+        const telem = JSON.parse(fs.readFileSync(telemetryPath, 'utf8'));
+        telem.slicesCommitted = (telem.slicesCommitted || 0) + 1;
+        telem.mutatingCallsOnSlice = 0;
+        telem.currentSlice = '';
+        fs.writeFileSync(telemetryPath, JSON.stringify(telem, null, 2), 'utf8');
+      } catch {}
+    }
+
+    appendBatchEvent(root, {
+      event: 'slice_finish',
+      slice: `Slice ${sliceId}`,
+      summary: `Finished Slice ${sliceId} with Referee-Verdict: VERIFIED`
+    });
+
+    // 7. Stage ONLY target files and tracking files (never git add -A)
+    const trackingFiles = [
+      '.spec/PROGRESS.md',
+      '.spec/SESSION_HANDOFF.md',
+      '.spec/.session-telemetry.json',
+      '.spec/STATUS_BATCH.jsonl',
+    ];
+    let allPermitted = Array.from(new Set([...changedFiles, ...trackingFiles]))
+      .filter((f) => isTargetMatch(f, targets) && fs.existsSync(path.join(root, f)));
+
+    if (allPermitted.length > 0) {
+      try {
+        const ignoredOut = execFileSync('git', ['check-ignore', '--', ...allPermitted], {
+          cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore']
+        });
+        const ignored = new Set(ignoredOut.split('\n').map((s) => s.trim()).filter(Boolean));
+        allPermitted = allPermitted.filter((f) => !ignored.has(f));
+      } catch {
+        // check-ignore exit 1 means none of the files are ignored
+      }
+    }
+
+    if (allPermitted.length > 0) {
+      execFileSync('git', ['add', '--ignore-errors', '--', ...allPermitted], { cwd: root, stdio: 'ignore' });
+    }
+
+    // Verify no unstaged dirty files remain
+    const remainingDirty = gitIn(root, ['status', '--porcelain']);
+    const unstaged = remainingDirty.split('\n').filter(Boolean).filter((l) => !/^[MADRC] /.test(l));
+    if (unstaged.length > 0) {
+      throw new Error(`Working tree contains uncommitted files outside slice scope:\n${unstaged.join('\n')}`);
+    }
+
+    const treeSha = gitIn(root, ['write-tree']);
+    const engineHash = getRefereeEngineHash(refereeScript);
+
+    // 8. Commit with Referee-* trailers
+    const trailers = [
+      '--trailer', 'Referee-Verdict: VERIFIED',
+      '--trailer', `Referee-Tree: ${treeSha}`
+    ];
+    if (engineHash) {
+      trailers.push('--trailer', `Referee-Engine: ${engineHash}`);
+    }
+
+    gitIn(root, ['commit', '-m', commitMsg, ...trailers]);
+    committed = true;
+    const commitSha = gitIn(root, ['log', '-1', '--oneline']);
+
+    // 9. Natural lull check
+    const lull = detectNaturalLull(root);
+
+    return {
+      success: true,
+      sliceId,
+      commitSha,
+      treeSha,
+      lull
+    };
+  } catch (err) {
+    if (!committed) {
+      // Rollback PROGRESS.md so [IN_PROGRESS] is preserved if commit fails
+      fs.writeFileSync(progressPath, originalProgressText, 'utf8');
+      if (originalHandoffText) {
+        fs.writeFileSync(handoffPath, originalHandoffText, 'utf8');
+      }
+    }
+    throw err;
   }
-
-  appendBatchEvent(root, {
-    event: 'slice_finish',
-    slice: `Slice ${sliceId}`,
-    summary: `Finished Slice ${sliceId} with Referee-Verdict: VERIFIED`
-  });
-
-  // 7. Stage ONLY target files and tracking files (never git add -A)
-  const trackingFiles = [
-    '.spec/PROGRESS.md',
-    '.spec/SESSION_HANDOFF.md',
-    '.spec/.session-telemetry.json',
-    '.spec/STATUS_BATCH.jsonl',
-  ];
-  const allPermitted = Array.from(new Set([...changedFiles, ...trackingFiles]))
-    .filter((f) => isTargetMatch(f, targets) && fs.existsSync(path.join(root, f)));
-
-  if (allPermitted.length > 0) {
-    execFileSync('git', ['add', '--', ...allPermitted], { cwd: root, stdio: 'ignore' });
-  }
-
-  // Verify no unstaged dirty files remain
-  const remainingDirty = gitIn(root, ['status', '--porcelain']);
-  const unstaged = remainingDirty.split('\n').filter(Boolean).filter((l) => !/^[MADRC] /.test(l));
-  if (unstaged.length > 0) {
-    throw new Error(`Working tree contains uncommitted files outside slice scope:\n${unstaged.join('\n')}`);
-  }
-
-  const treeSha = gitIn(root, ['write-tree']);
-  const engineHash = getRefereeEngineHash(refereeScript);
-
-  // 8. Commit with Referee-* trailers
-  const trailers = [
-    '--trailer', 'Referee-Verdict: VERIFIED',
-    '--trailer', `Referee-Tree: ${treeSha}`
-  ];
-  if (engineHash) {
-    trailers.push('--trailer', `Referee-Engine: ${engineHash}`);
-  }
-
-  gitIn(root, ['commit', '-m', commitMsg, ...trailers]);
-  const commitSha = gitIn(root, ['log', '-1', '--oneline']);
-
-  // 9. Natural lull check
-  const lull = detectNaturalLull(root);
-
-  return {
-    success: true,
-    sliceId,
-    commitSha,
-    treeSha,
-    lull
-  };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
