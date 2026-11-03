@@ -20,9 +20,26 @@ const MANIFEST = /(^|\/)(package\.json|package-lock\.json|pnpm-lock\.yaml|yarn\.
 // Spoke-owned engine-adjacent files that a spoke may change even though they sit in an engine folder
 const SPOKE_OWNED = new Set(['.claude/project-rules.md', '.claude/settings.spoke.json']);
 
+export function isPackageJsonVersionOnly(fileDiff) {
+  if (!fileDiff) return false;
+  const { added = [], removed = [] } = fileDiff;
+  if (added.length === 0 && removed.length === 0) return false;
+  const VERSION_LINE = /^\s*"version"\s*:\s*"[^"]+"\s*,?\s*$/;
+  return added.every((l) => VERSION_LINE.test(l)) && removed.every((l) => VERSION_LINE.test(l));
+}
+
 // Red tripwires: any match makes the slice Red, whatever colour the slice line carries
 export const TRIPWIRES = [
-  { name: 'dependency manifest or lockfile', test: (f) => MANIFEST.test(f) },
+  {
+    name: 'dependency manifest or lockfile',
+    test: (f, diff) => {
+      if (!MANIFEST.test(f)) return false;
+      if ((f === 'package.json' || f.endsWith('/package.json')) && diff && diff.has(f)) {
+        if (isPackageJsonVersionOnly(diff.get(f))) return false;
+      }
+      return true;
+    },
+  },
   { name: 'migrations folder', test: (f) => /(^|\/)migrations\//.test(f) },
   { name: 'schema file', test: (f) => /schema/i.test(f) },
   { name: 'auth file', test: (f) => /(^|[/._-])auth([/._-]|$)/i.test(f) },
@@ -106,7 +123,7 @@ export function analyze({
 
   for (const file of changed) {
     for (const t of TRIPWIRES) {
-      if (t.test(file)) { problems.push(`Red tripwire (${t.name}): ${file}`); tripwireFired = true; }
+      if (t.test(file, diff)) { problems.push(`Red tripwire (${t.name}): ${file}`); tripwireFired = true; }
     }
   }
   for (const file of deleted) { problems.push(`Red tripwire (file deleted): ${file}`); tripwireFired = true; }
@@ -140,7 +157,12 @@ export function analyze({
     const isAllowed = (file, allowed) =>
       file === allowed || file.startsWith(allowed.endsWith('/') ? allowed : `${allowed}/`);
     for (const file of touched) {
-      if (file.startsWith('.spec/') || file === 'CLAUDE.md' || targets.some((t) => isAllowed(file, t))) continue;
+      if (
+        file.startsWith('.spec/') ||
+        file === 'CLAUDE.md' ||
+        ((file === 'package.json' || file.endsWith('/package.json')) && isPackageJsonVersionOnly(diff.get(file))) ||
+        targets.some((t) => isAllowed(file, t))
+      ) continue;
       if (targets.some((t) => t.includes('el-exit-gate') || t.includes('pre-tool-guard')) && file === '.harness/hooks/lib/guard-rules.test.mjs') continue;
       if (targets.some((t) => t.startsWith('.harness/agents/')) &&
           (file.startsWith('.claude/agents/') || (file.startsWith('.agents/') && !file.startsWith('.agents/rules/') && !file.startsWith('.agents/skills/')))) continue;
