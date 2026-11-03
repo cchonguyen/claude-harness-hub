@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { analyze, formatJsonVerdict, parseDiff, parseNameStatus, isCommentLine, ASSERTION, SKIP_MARK } from './pr-scope-check.mjs';
+import { analyze, formatJsonVerdict, parseDiff, parseNameStatus, isCommentLine, ASSERTION, SKIP_MARK, isPackageJsonVersionOnly } from './pr-scope-check.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const SCRIPT = path.join(here, 'pr-scope-check.mjs');
@@ -113,6 +113,48 @@ test('each Red tripwire fires and marks the slice Red', () => {
   const r = analyze({ changed: files, progress: '' });
   assert.equal(r.tripwireFired, true);
   for (const f of files) assert.ok(r.problems.some((p) => p.includes(f)), `missing tripwire for ${f}`);
+});
+
+test('package.json with only a version bump does not trip the dependency manifest wire', () => {
+  const diff = testDiff('package.json', ['  "version": "0.8.3",'], ['  "version": "0.8.2",']);
+  const r = analyze({ changed: ['package.json'], diff, progress: '' });
+  assert.equal(r.tripwireFired, false);
+  assert.equal(r.problems.length, 0);
+});
+
+test('package.json with dependency changes trips the dependency manifest wire', () => {
+  const diff = testDiff('package.json', ['  "lodash": "^4.17.21"'], []);
+  const r = analyze({ changed: ['package.json'], diff, progress: '' });
+  assert.equal(r.tripwireFired, true);
+  assert.ok(r.problems.some((p) => p.includes('package.json')));
+});
+
+test('package.json with only a version bump is allowed outside active slice Target files', () => {
+  const diff = new Map([
+    ['src/foo.js', { added: ['const x = 1;'], removed: [] }],
+    ['package.json', { added: ['  "version": "1.0.1",'], removed: ['  "version": "1.0.0",'] }],
+  ]);
+  const progress = '- [ ] **Slice 1.1: Feature** [IN_PROGRESS] Target files: src/foo.js | Coords: [110] | Verify: npm test\n';
+  const r = analyze({ changed: ['src/foo.js', 'package.json'], diff, progress });
+  assert.equal(r.tripwireFired, false);
+  assert.deepEqual(r.problems, []);
+});
+
+test('isPackageJsonVersionOnly identifies pure version bumps vs dependencies', () => {
+  assert.equal(isPackageJsonVersionOnly(null), false);
+  assert.equal(isPackageJsonVersionOnly({ added: [], removed: [] }), false);
+  assert.equal(isPackageJsonVersionOnly({
+    added: ['"version": "1.2.3"'],
+    removed: ['"version": "1.2.2"'],
+  }), true);
+  assert.equal(isPackageJsonVersionOnly({
+    added: ['  "version": "1.2.3",'],
+    removed: ['  "version": "1.2.2",'],
+  }), true);
+  assert.equal(isPackageJsonVersionOnly({
+    added: ['  "version": "1.2.3",', '  "dependencies": {}'],
+    removed: ['  "version": "1.2.2",'],
+  }), false);
 });
 
 test('a deleted file is a Red tripwire', () => {
