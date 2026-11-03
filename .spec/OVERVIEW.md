@@ -1,6 +1,8 @@
 # Project Overview (Owner's Manual)
 
 ## What This App Does
+- **Plain English:** This repo is the source of truth for a set of rules, helper scripts, and subagent definitions that keep Claude Code on a tight leash. It is the "hub" that other project repos ("spokes") copy from. It also ships a local dashboard (`npm run dev`) for browsing those rules, running the harness checks, and editing its spec files.
+- **Public-release status:** Being prepared for public visibility. See `README.md` for the orientation guide and `SECURITY.md` for the local-only safety model.
 - Centralized Token-Optimized Claude Code Agent Harness (`claude-harness-hub`).
 
 ## Active External Services & Keys
@@ -12,7 +14,7 @@
 - **Live & Verified:** Operator dashboard (React app, `npm run dev`) showing harness commands, agents, specs, and copy-paste prompts for Claude and Google AI Studio.
 - **In Progress:** None
 - **Designed, not built:** Harness v3.0 "Manager Mode". New projects require a planned task before code changes (a one-step `/quick-fix` covers small tweaks), Claude can run up to 3 low-risk tasks in a row, risky changes always stop for you, and an automatic check flags broken pull requests and a broken main branch. Full contract in `.spec/SYSTEM_SPEC.md` section 4.
-- **Built, tested on scratch copies:** Slice 3.0 (smoke check, `cchonguyen/charliechonguyen.com#7`) and Slice 3.1 (hub-sync now respects file ownership: hub-owned files refresh, spoke files are never touched, settings and blocks merge, and a first sync backs up anything it replaces).
+- **Built, tested on scratch copies:** Slice 3.0 (smoke check, PR #7 in a separate spoke repo) and Slice 3.1 (hub-sync now respects file ownership: hub-owned files refresh, spoke files are never touched, settings and blocks merge, and a first sync backs up anything it replaces).
 - **Built, tests pass, live CI not yet run:** Slice 3.2 (CI gate). `pr-scope-check.mjs` now has Red tripwires, the test-assertion rule, and a `--strict` mode that spokes use to block a PR. Spoke workflow templates are in `.harness/templates/workflows/`. Hub-sync does not copy them into spokes yet.
 - **Not confirmed:** whether the live hooks wrote the slice checkpoint in this hub session. A scratch copy does write it, so the live hook did not run for that edit, and that is still open. It happened again for Slice 3.2.
 - **Built, tests pass, live spoke check not yet run:** Slice 3.3 (guard). Spokes in Manager Mode block source edits until a task is marked in progress (PLAN LOCK). Harness files, `.spec/harness.json`, and the AGENTS.md harness block are locked in spokes. The colour tag of an active slice is frozen. A Bash write tripwire blocks commands that write to harness files. A file is judged by its own git repo.

@@ -1,26 +1,95 @@
-# Claude Harness Hub (`v2.2.0`)
+# Claude Harness Hub
 
-Control plane dashboard and authoritative source of truth for the Claude Code v2.2.0 Agent Harness (`.claude/`, `.harness/`, `.spec/`, `CLAUDE.md`).
+Claude Harness Hub is the home of a **harness** for [Claude Code](https://www.anthropic.com/claude-code), Anthropic's AI coding assistant that runs in a terminal. A harness is a set of rules, guard scripts, and checks that keep an AI agent focused on the work you asked for, so it does not wander, skip verification, or edit files it should leave alone.
 
-## Quick Start
+This repository is the source of truth for one such harness (currently engine version 3.2.0, see [`.harness-version`](.harness-version)). It also contains a small local dashboard for browsing the harness, running its checks, and editing its planning files.
 
-1. `npm install`
-2. `npm run dev`
-3. Open `http://127.0.0.1:3000` (port `3000`)
+## Who this is for
 
-## Dashboard Tabs (One-Line Purpose)
+- Developers who use Claude Code on real projects and want a tested starting point for guardrails.
+- Anyone curious how to build agent guardrails with plain Node.js scripts and Markdown files.
 
-- **State Machine & Slices (`overview`)**: Shows the "What's next" action line, current work mode (`Vibe` vs `Slice`), checkpoint status, `SESSION_HANDOFF.md` summary, and `.spec/PROGRESS.md` task locks.
-- **Runner Matcher Lab (`runner`)**: Classifies shell commands against `runner-matcher.mjs` rules (without running arbitrary input) and executes allow-listed harness checks with persistent test output.
-- **Subagents (`agents`)**: Inspects the model-routed subagent definitions (`architect`, `auditor`, `discovery`, `engineer`) inside `.claude/agents/`.
-- **Slash Commands (`commands`)**: Browses the zero-token and workflow slash commands defined in `.claude/commands/`.
-- **Handoff Bundler (`handoff`)**: Builds `.spec/HANDOFF_PACKET.md` for zero-cost Gemini audits, displaying line counts, included files, staleness warnings against `PROGRESS.md`, and the last copied packet across refreshes.
-- **.spec & Rules Studio (`specs`)**: Edits project-owned `.spec/*` and `CLAUDE.md` contracts with file ownership labels, unsaved-change warnings, and a pre-save line diff preview.
-- **Spoke Sync & Bootstrap (`spoke`)**: Verifies whether the hub repository is attached, checks whether engine files match the hub, runs a non-destructive sync dry-run, and provides spoke bootstrap snippets.
-- **Security & Audit (`security`)**: Displays `.claude/settings.json` declarative allow/deny rules and the 4-stage lifecycle hook pipeline.
+No API keys are needed to run anything in this repository.
 
-## Project Verification Commands (`CLAUDE.md`)
+## What is in here
 
-- **Typecheck**: `npm run typecheck --silent`
-- **Unit Tests**: `node --test .harness/hooks/lib/runner-matcher.test.mjs`
-- **Lint**: `npm run lint --silent`
+| Path | What it holds |
+| --- | --- |
+| `CLAUDE.md`, `AGENTS.md` | Instructions that Claude Code and other agents read first. |
+| `.claude/` | Subagent definitions, slash commands, and `settings.json` with allow and deny rules and hooks. |
+| `.harness/` | Zero-dependency Node.js hooks and scripts: guards, checks, sync, and the PR scope check. |
+| `.spec/` | Project state: the slice queue, architecture decisions, contracts, and handoff notes. |
+| `server.ts`, `src/` | The dashboard: an Express server and a React front end. |
+| `.github/workflows/` | Continuous integration: typecheck, lint, and unit tests on every pull request and push to `main`. |
+
+## Quick start
+
+You need [Node.js 22](https://nodejs.org) (the version CI uses) and Git.
+
+```bash
+git clone https://github.com/cchonguyen/claude-harness-hub.git
+cd claude-harness-hub
+npm install
+npm run dev
+```
+
+Then open <http://127.0.0.1:3000> in your browser. The dashboard only listens on your own machine.
+
+## Dashboard tabs
+
+- **Overview (`overview`):** The "what's next" line, the current work mode, the session handoff summary, and the slice locks from `.spec/PROGRESS.md`.
+- **Runner (`runner`):** Classifies a shell command against the harness rules, and runs the allow-listed checks (unit tests, typecheck, lint) with saved output.
+- **Subagents (`agents`):** Lists the subagent definitions in `.claude/agents/` and the model each one uses.
+- **Commands (`commands`):** Lists the slash commands in `.claude/commands/`.
+- **Handoff (`handoff`):** Builds a bundle of the repo's state for an outside reviewer, with warnings when it looks stale.
+- **Specs (`specs`):** Edits the registered planning and contract files, with a diff preview before saving.
+- **Spoke sync (`spoke`):** Checks whether a project repo ("spoke") matches the engine files in this hub, and shows a sync dry run.
+- **Security (`security`):** Shows the allow and deny rules in `.claude/settings.json` and the hook pipeline.
+
+## Running the checks
+
+| Command | What it does |
+| --- | --- |
+| `npm run typecheck` | Syntax-checks the harness's `.mjs` files. It does not run the TypeScript compiler. |
+| `npm run lint` | Runs the navigator check, which validates the spec index links and line budgets. It is not a code linter. |
+| `npm test` | Runs the runner-matcher tests. |
+| `node --test .harness/hooks/lib/*.test.mjs .harness/scripts/*.test.mjs .harness/scripts/lib/*.test.mjs` | Runs the full unit test suite. |
+| `npm run build` | Builds the dashboard for production. |
+
+## How the harness works
+
+- **Hooks** are scripts that Claude Code runs before and after it uses a tool. For example, they block edits to protected files and log failed commands.
+- **Slices** split work into small, named units in `.spec/PROGRESS.md`. A slice is only edited while it is marked in progress.
+- **Subagents** are narrow helpers, such as a planner, an engineer, or an auditor, each with limited tools and a chosen model.
+- **Referee trailers** are verification lines at the bottom of a git commit message. They record that the checks passed for that exact tree of files.
+- **Spokes** are project repositories that copy the engine files from this hub. `.harness/scripts/hub-sync.mjs` handles the copy. See the "Spoke Connection Contract" in `.spec/SYSTEM_SPEC.md`.
+
+Some notes mention Google Antigravity, Google AI Studio, or Gemini. Those are other AI tools the harness can hand a task to. They are optional, and the core harness does not depend on them.
+
+## Status
+
+This is an early-stage project, built by one developer working with AI agents. `.spec/OVERVIEW.md` lists what has been tested live and what has not. Known gaps:
+
+- The `version` field in `package.json` still says 2.2.0, while the engine version is 3.2.0.
+- The repository has no `package-lock.json`, so `npm install` may resolve slightly different dependency versions over time.
+
+## Security
+
+The dashboard binds to `127.0.0.1` by default, has no login, and can edit a fixed list of planning files. Do not expose it to a network. The dashboard only runs allow-listed commands. The repository contains no secrets, and `.env` files are blocked by the Claude Code settings and by `.gitignore`. See [SECURITY.md](SECURITY.md) to report a vulnerability.
+
+## Contributing
+
+Questions and bug reports are welcome as issues. Please open an issue before starting a large pull request so we can agree on the approach first.
+
+## Glossary
+
+- **Claude Code:** Anthropic's terminal assistant for software work.
+- **Harness:** The rules, hooks, and checks that keep an agent on track.
+- **Hub and spoke:** The hub is this repository. A spoke is a project repository that copies from it.
+- **Hook:** A script that Claude Code runs at a fixed point, such as before a tool call.
+- **Subagent:** A specialized helper that Claude Code can hand a task to.
+- **Slice:** One small, self-contained unit of work.
+
+## License
+
+This project is released under the [MIT License](LICENSE).

@@ -70,7 +70,7 @@ test('protected path rule', () => {
 test('hub detection uses the origin URL only', () => {
   assert.equal(isHubOrigin('https://github.com/cchonguyen/claude-harness-hub.git'), true);
   assert.equal(isHubOrigin('git@github.com:cchonguyen/claude-harness-hub'), true);
-  assert.equal(isHubOrigin('https://github.com/cchonguyen/charliechonguyen.com'), false);
+  assert.equal(isHubOrigin('https://github.com/example-owner/example-site'), false);
   assert.equal(isHubOrigin(''), false);
 });
 
