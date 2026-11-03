@@ -6,23 +6,23 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  parseDeweyIndex,
-  extractDeweyRefs,
-  checkDeweyReferences,
+  parseAtlasIndex,
+  extractAtlasCoords,
+  checkAtlasReferences,
   checkLineBudgets,
   archiveCompletedSlices,
-  librarianCheck,
+  navigatorCheck,
   countLines
-} from './librarian.mjs';
-import { freezeCrimeScene } from './freeze-crime-scene.mjs';
+} from './navigator.mjs';
+import { freezeBlackBox } from './freeze-black-box.mjs';
 import { parseActiveTargets as parseTargetsFinish, finishSlice } from './finish-slice.mjs';
 import { parseActiveTargets as parseTargetsScope, analyze as analyzeScope } from './pr-scope-check.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const SCRIPT = path.join(here, 'librarian.mjs');
+const SCRIPT = path.join(here, 'navigator.mjs');
 
 function makeTempSpecRepo() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'librarian-test-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'navigator-test-'));
   const git = (...args) => execFileSync('git', args, { cwd: dir, stdio: 'ignore' });
   git('init', '-q', '-b', 'main');
   git('config', 'user.email', 'test@example.com');
@@ -38,21 +38,21 @@ function makeTempSpecRepo() {
   fs.writeFileSync(path.join(dir, '.harness', 'scripts', 'referee.mjs'), '// referee\n');
   fs.writeFileSync(path.join(dir, 'b.txt'), 'initial b\n');
 
-  // Create sample INDEX.md
+  // Create sample ATLAS.md
   fs.writeFileSync(
-    path.join(dir, '.spec', 'INDEX.md'),
-    `# Dewey Decimal Spec Index
+    path.join(dir, '.spec', 'ATLAS.md'),
+    `# Context Atlas
 
-## 000 Card Catalog
+## Sector 000 Card Catalog
 - \`000\` [CLAUDE.md](CLAUDE.md) — 5-line pointer
 - \`010\` [AGENTS.md](AGENTS.md) — Universal catalog
 
-## 100 Work Dispatch
+## Sector 100 Work Dispatch
 - \`110\` [.spec/PROGRESS.md](.spec/PROGRESS.md) — Active slice queue
 - \`120\` [.spec/archive/HISTORY.md](.spec/archive/HISTORY.md) — Archive
-- \`130\` \`.spec/CRIME_SCENE.md\` — Incident post-mortem
+- \`130\` \`.spec/BLACK_BOX.md\` — Incident post-mortem
 
-## 200 Boundaries
+## Sector 200 Boundaries
 - \`210\` [.spec/boundaries/locks.md](.spec/boundaries/locks.md) — File locks
 `
   );
@@ -61,10 +61,10 @@ function makeTempSpecRepo() {
   fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'AGENTS.md content\n');
   fs.writeFileSync(
     path.join(dir, '.spec', 'PROGRESS.md'),
-    `# Progress (Dewey Class 110)\n- [x] **Slice 1** Target files: a.txt | Refs: [110, 210]\n- [ ] **Slice 2** [IN_PROGRESS] Target files: b.txt | Refs: [000, 110]\n`
+    `# Progress (Atlas Sector 110)\n- [x] **Slice 1** Target files: a.txt | Coords: [110, 210]\n- [ ] **Slice 2** [IN_PROGRESS] Target files: b.txt | Coords: [000, 110]\n`
   );
-  fs.writeFileSync(path.join(dir, '.spec', 'archive', 'HISTORY.md'), '# Completed Archive (Dewey Class 120)\n');
-  fs.writeFileSync(path.join(dir, '.spec', 'boundaries', 'locks.md'), '# Locks (Dewey 210)\n');
+  fs.writeFileSync(path.join(dir, '.spec', 'archive', 'HISTORY.md'), '# Completed Archive (Atlas Sector 120)\n');
+  fs.writeFileSync(path.join(dir, '.spec', 'boundaries', 'locks.md'), '# Locks (Atlas Sector 210)\n');
 
   fs.writeFileSync(
     path.join(dir, '.harness', 'config', 'thresholds.json'),
@@ -74,6 +74,7 @@ function makeTempSpecRepo() {
           'CLAUDE.md': 5,
           'AGENTS.md': 40,
           '.spec/PROGRESS.md': 60,
+          '.spec/ATLAS.md': 50
         }
       }
     }, null, 2)
@@ -85,10 +86,10 @@ function makeTempSpecRepo() {
   return dir;
 }
 
-test('librarianCheck passes on clean repository with valid Dewey refs and line limits', () => {
+test('navigatorCheck passes on clean repository with valid Atlas coords and line limits', () => {
   const dir = makeTempSpecRepo();
   try {
-    const res = librarianCheck(dir);
+    const res = navigatorCheck(dir);
     assert.equal(res.ok, true);
     assert.equal(res.errors.length, 0);
     assert.equal(res.budgetViolations.length, 0);
@@ -99,53 +100,55 @@ test('librarianCheck passes on clean repository with valid Dewey refs and line l
   }
 });
 
-test('extractDeweyRefs correctly extracts codes from Refs:, brackets, and headers', () => {
+test('extractAtlasCoords correctly extracts codes from Coords:, Refs:, brackets, and headers', () => {
   const text = `
-# Spec (Dewey Class 110)
+# Spec (Atlas Sector 110)
 Reference to [210] and [305].
-- [ ] Slice 1 | Refs: [000, 010, 120]
-Some note about Dewey 320.
+- [ ] Slice 1 | Coords: [000, 010, 120]
+- [ ] Slice 2 | Refs: [210, 220]
+Some note about Sector 320.
 Invalid ref [1] should not match 3-digit pattern.
 `;
-  const refs = extractDeweyRefs(text);
-  assert.ok(refs.has('110'));
-  assert.ok(refs.has('210'));
-  assert.ok(refs.has('305'));
-  assert.ok(refs.has('000'));
-  assert.ok(refs.has('010'));
-  assert.ok(refs.has('120'));
-  assert.ok(refs.has('320'));
-  assert.equal(refs.has('1'), false);
+  const coords = extractAtlasCoords(text);
+  assert.ok(coords.has('110'));
+  assert.ok(coords.has('210'));
+  assert.ok(coords.has('220'));
+  assert.ok(coords.has('305'));
+  assert.ok(coords.has('000'));
+  assert.ok(coords.has('010'));
+  assert.ok(coords.has('120'));
+  assert.ok(coords.has('320'));
+  assert.equal(coords.has('1'), false);
 });
 
-test('checkDeweyReferences detects broken/unregistered Dewey reference codes', () => {
+test('checkAtlasReferences detects broken/unregistered Atlas coordinate codes', () => {
   const dir = makeTempSpecRepo();
   try {
     // Add invalid reference [999] in PROGRESS.md
     fs.appendFileSync(
       path.join(dir, '.spec', 'PROGRESS.md'),
-      '- [ ] **Slice 3** Target files: c.txt | Refs: [999]\n'
+      '- [ ] **Slice 3** Target files: c.txt | Coords: [999]\n'
     );
 
-    const { brokenRefs } = checkDeweyReferences(dir);
+    const { brokenRefs } = checkAtlasReferences(dir);
     assert.equal(brokenRefs.length, 1);
     assert.equal(brokenRefs[0].code, '999');
-    assert.match(brokenRefs[0].reason, /not found in \.spec\/INDEX\.md/);
+    assert.match(brokenRefs[0].reason, /not found in \.spec\/ATLAS\.md/);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
 
-test('checkDeweyReferences detects broken links in INDEX.md', () => {
+test('checkAtlasReferences detects broken links in ATLAS.md', () => {
   const dir = makeTempSpecRepo();
   try {
-    // Add reference to non-existent file in INDEX.md
+    // Add reference to non-existent file in ATLAS.md
     fs.appendFileSync(
-      path.join(dir, '.spec', 'INDEX.md'),
+      path.join(dir, '.spec', 'ATLAS.md'),
       '- `950` [.spec/missing.md](.spec/missing.md) — Missing file\n'
     );
 
-    const { brokenLinks } = checkDeweyReferences(dir);
+    const { brokenLinks } = checkAtlasReferences(dir);
     assert.equal(brokenLinks.length, 1);
     assert.equal(brokenLinks[0].code, '950');
     assert.match(brokenLinks[0].reason, /Target file not found on disk/);
@@ -194,26 +197,26 @@ test('archiveCompletedSlices archives completed slices to HISTORY.md and preserv
   }
 });
 
-test('CLI librarian.mjs --check exits 0 on valid repository and 1 on violations', () => {
+test('CLI navigator.mjs --check exits 0 on valid repository and 1 on violations', () => {
   const dir = makeTempSpecRepo();
   try {
     // 1. Clean repo should exit 0
     const pass = spawnSync(process.execPath, [SCRIPT, '--check'], { cwd: dir, encoding: 'utf8' });
     assert.equal(pass.status, 0);
-    assert.match(pass.stdout, /LIBRARIAN CHECK: PASS/);
+    assert.match(pass.stdout, /NAVIGATOR CHECK: PASS/);
 
     // 2. Introduce violation: broken ref
-    fs.appendFileSync(path.join(dir, '.spec', 'PROGRESS.md'), '- [ ] Invalid slice | Refs: [999]\n');
+    fs.appendFileSync(path.join(dir, '.spec', 'PROGRESS.md'), '- [ ] Invalid slice | Coords: [999]\n');
     const fail = spawnSync(process.execPath, [SCRIPT, '--check'], { cwd: dir, encoding: 'utf8' });
     assert.equal(fail.status, 1);
-    assert.match(fail.stderr, /LIBRARIAN CHECK FAILED/);
+    assert.match(fail.stderr, /NAVIGATOR CHECK FAILED/);
     assert.match(fail.stderr, /\[999\]/);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
 
-test('freezeCrimeScene captures active slice, git status, diff, stashes, and creates CRIME_SCENE.md', () => {
+test('freezeBlackBox captures active slice, git status, diff, stashes, and creates BLACK_BOX.md', () => {
   const dir = makeTempSpecRepo();
   const git = (...args) => execFileSync('git', args, { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
 
@@ -221,41 +224,41 @@ test('freezeCrimeScene captures active slice, git status, diff, stashes, and cre
     // Make a dirty edit on slice 2
     fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'dirty edit in slice 2');
 
-    const res = freezeCrimeScene(dir, 'Circuit breaker Strike 2 triggered in test.');
+    const res = freezeBlackBox(dir, 'Circuit breaker Strike 2 triggered in test.');
     assert.equal(res.sliceId, '2');
     assert.equal(res.stashCreated, true);
-    assert.match(res.stashMessage, /crime-scene\/2/);
+    assert.match(res.stashMessage, /black-box\/2/);
 
-    // Check CRIME_SCENE.md was created
-    const crimeScenePath = path.join(dir, '.spec', 'CRIME_SCENE.md');
-    assert.ok(fs.existsSync(crimeScenePath));
-    const content = fs.readFileSync(crimeScenePath, 'utf8');
-    assert.match(content, /Dewey Class 130/);
+    // Check BLACK_BOX.md was created
+    const blackBoxPath = path.join(dir, '.spec', 'BLACK_BOX.md');
+    assert.ok(fs.existsSync(blackBoxPath));
+    const content = fs.readFileSync(blackBoxPath, 'utf8');
+    assert.match(content, /Atlas Sector 130/);
     assert.match(content, /Active Slice:\*\* 2/);
-    assert.match(content, /crime-scene\/2/);
+    assert.match(content, /black-box\/2/);
     assert.match(content, /dirty edit in slice 2/);
 
     // Working directory should have dirty edits stashed (AGENTS.md no longer modified)
     const status = git('status', '--porcelain');
     const statusLines = status.split('\n').filter(Boolean);
     assert.ok(!statusLines.some((l) => l.includes('AGENTS.md')));
-    assert.ok(statusLines.some((l) => l.includes('.spec/CRIME_SCENE.md')));
+    assert.ok(statusLines.some((l) => l.includes('.spec/BLACK_BOX.md')));
 
     // Stash should exist
     const stashList = git('stash', 'list');
-    assert.match(stashList, /crime-scene\/2/);
+    assert.match(stashList, /black-box\/2/);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
 
-test('parseActiveTargets robustly strips | Refs, | Verify, [NEW], and backticks', () => {
-  const line = '- [ ] **Slice 4.4: Engine** [IN_PROGRESS] Target files: `a.mjs`, `[NEW] b.mjs`, c.mjs | Refs: [110, 120] | Verify: npm test';
+test('parseActiveTargets robustly strips | Coords, | Refs, | Verify, [NEW], [DELETE], and backticks', () => {
+  const line = '- [ ] **Slice 5.1: Engine** [IN_PROGRESS] Target files: `a.mjs`, `[NEW] b.mjs`, `[DELETE] c.mjs`, d.mjs | Coords: [110, 120] | Verify: npm test';
   const finishTargets = parseTargetsFinish(line);
   const scopeTargets = parseTargetsScope(line);
 
-  assert.deepEqual(finishTargets, ['a.mjs', 'b.mjs', 'c.mjs']);
-  assert.deepEqual(scopeTargets, ['a.mjs', 'b.mjs', 'c.mjs']);
+  assert.deepEqual(finishTargets, ['a.mjs', 'b.mjs', 'c.mjs', 'd.mjs']);
+  assert.deepEqual(scopeTargets, ['a.mjs', 'b.mjs', 'c.mjs', 'd.mjs']);
 });
 
 test('pr-scope-check analyze verifies line budgets against soft caps', () => {

@@ -11,7 +11,7 @@ import {
 } from '../pre-tool-guard.mjs';
 import {
   validateProgressSlices
-} from '../elephant-exit-gate.mjs';
+} from '../el-exit-gate.mjs';
 
 test('engine lock covers hub-owned files and leaves spoke files alone', () => {
   for (const f of ['.harness/hooks/pre-tool-guard.mjs', '.harness-version', '.claude/settings.json', '.claude/agents/engineer.md',
@@ -232,12 +232,12 @@ test('role resolution identifies subagents vs coordinator', () => {
   assert.equal(resolveRole({}), 'coordinator');
 });
 
-// --- Slice 4.3 Tests: Elephant Exit Gate ---
+// --- Slice 4.3 Tests: el-architect Exit Gate ---
 
-test('elephant exit gate passes when all slices have valid Target files, Refs, and Verify', () => {
+test('el exit gate passes when all slices have valid Target files, Coords, and Verify', () => {
   const validProgress = `# Active Slice Queue
-- [x] **Slice 1.1: Spec Base** Target files: src/a.js, src/b.js | Refs: [110, 210] | Verify: npm test
-- [ ] **Slice 1.2: Implementation** [IN_PROGRESS] Target files: src/c.js | Refs: [210, 305] | Verify: node --test test/*.js
+- [x] **Slice 1.1: Spec Base** Target files: src/a.js, src/b.js | Coords: [110, 210] | Verify: npm test
+- [ ] **Slice 1.2: Implementation** [IN_PROGRESS] Target files: src/c.js | Coords: [210, 305] | Verify: node --test test/*.js
 `;
   const result = validateProgressSlices(validProgress);
   assert.equal(result.valid, true);
@@ -245,29 +245,29 @@ test('elephant exit gate passes when all slices have valid Target files, Refs, a
   assert.equal(result.slicesCount, 2);
 });
 
-test('elephant exit gate blocks slices missing Target files, Refs, or Verify', () => {
-  const missingTargets = `- [ ] **Slice 2.1: Bad** | Refs: [110] | Verify: npm test\n`;
+test('el exit gate blocks slices missing Target files, Coords, or Verify', () => {
+  const missingTargets = `- [ ] **Slice 2.1: Bad** | Coords: [110] | Verify: npm test\n`;
   const r1 = validateProgressSlices(missingTargets);
   assert.equal(r1.valid, false);
   assert.match(r1.errors[0], /Missing "Target files:" declaration/);
 
-  const emptyTargets = `- [ ] **Slice 2.2: Bad** Target files: | Refs: [110] | Verify: npm test\n`;
+  const emptyTargets = `- [ ] **Slice 2.2: Bad** Target files: | Coords: [110] | Verify: npm test\n`;
   const r2 = validateProgressSlices(emptyTargets);
   assert.equal(r2.valid, false);
   assert.match(r2.errors[0], /"Target files:" declaration is empty/);
 
-  const missingRefs = `- [ ] **Slice 2.3: Bad** Target files: src/a.js | Verify: npm test\n`;
-  const r3 = validateProgressSlices(missingRefs);
+  const missingCoords = `- [ ] **Slice 2.3: Bad** Target files: src/a.js | Verify: npm test\n`;
+  const r3 = validateProgressSlices(missingCoords);
   assert.equal(r3.valid, false);
-  assert.match(r3.errors[0], /Missing "Refs:" declaration/);
+  assert.match(r3.errors[0], /Missing "Coords:" declaration/);
 
-  const missingVerify = `- [ ] **Slice 2.4: Bad** Target files: src/a.js | Refs: [110]\n`;
+  const missingVerify = `- [ ] **Slice 2.4: Bad** Target files: src/a.js | Coords: [110]\n`;
   const r4 = validateProgressSlices(missingVerify);
   assert.equal(r4.valid, false);
   assert.match(r4.errors[0], /Missing "Verify:" command/);
 });
 
-test('elephant exit gate blocks progress file with no declared slices', () => {
+test('el exit gate blocks progress file with no declared slices', () => {
   const emptyProgress = `# Active Slice Queue\nNo slices yet.\n`;
   const result = validateProgressSlices(emptyProgress);
   assert.equal(result.valid, false);

@@ -13,9 +13,9 @@ const gitIn = (cwd, args) => {
   }
 };
 
-export function freezeCrimeScene(root, reason = 'Circuit breaker Strike 2 triggered.') {
+export function freezeBlackBox(root, reason = 'Circuit breaker Strike 2 triggered.') {
   const progressPath = path.join(root, '.spec', 'PROGRESS.md');
-  const crimeScenePath = path.join(root, '.spec', 'CRIME_SCENE.md');
+  const blackBoxPath = path.join(root, '.spec', 'BLACK_BOX.md');
 
   // 1. Identify active slice from .spec/PROGRESS.md
   let sliceId = 'unknown';
@@ -32,9 +32,9 @@ export function freezeCrimeScene(root, reason = 'Circuit breaker Strike 2 trigge
     }
   }
 
-  // Clean sliceId for stash name (e.g. "4.4" or "slice-4.4")
+  // Clean sliceId for stash name (e.g. "5.1" or "slice-5.1")
   const cleanSliceId = sliceId.replace(/[^a-zA-Z0-9._-]/g, '-');
-  const stashMessage = `crime-scene/${cleanSliceId}`;
+  const stashMessage = `black-box/${cleanSliceId}`;
 
   // 2. Capture git status, git diff, and suspect files BEFORE stashing
   const gitStatus = gitIn(root, ['status', '--short']);
@@ -42,7 +42,7 @@ export function freezeCrimeScene(root, reason = 'Circuit breaker Strike 2 trigge
   const statusLines = gitStatus.split('\n').filter(Boolean);
   const suspectFiles = statusLines.map((l) => l.slice(2).trim().replace(/.* -> /, ''));
 
-  // 3. Save git stash under crime-scene/<slice-id>
+  // 3. Save git stash under black-box/<slice-id>
   let stashCreated = false;
   if (statusLines.length > 0) {
     try {
@@ -66,14 +66,14 @@ export function freezeCrimeScene(root, reason = 'Circuit breaker Strike 2 trigge
     execFileSync('git', ['reset', '--hard', 'HEAD'], { cwd: root, stdio: 'ignore' });
   } catch {}
 
-  // 4. Write .spec/CRIME_SCENE.md (Dewey Class 130) AFTER stash so it is preserved in working copy
-  fs.mkdirSync(path.dirname(crimeScenePath), { recursive: true });
+  // 4. Write .spec/BLACK_BOX.md (Atlas Sector 130) AFTER stash so it is preserved in working copy
+  fs.mkdirSync(path.dirname(blackBoxPath), { recursive: true });
   const timestamp = new Date().toISOString();
   const suspectList = suspectFiles.length > 0
     ? suspectFiles.map((f) => `- \`${f}\``).join('\n')
     : '- (No dirty files found in working copy)';
 
-  const crimeSceneContent = `# Crime Scene Report (Dewey Class 130)
+  const blackBoxContent = `# Black Box Report (Atlas Sector 130)
 
 - **Active Slice:** ${sliceId}
 - **Timestamp:** ${timestamp}
@@ -102,12 +102,12 @@ ${gitDiff || '(no diff)'}
 \`\`\`
 `;
 
-  fs.writeFileSync(crimeScenePath, crimeSceneContent, 'utf8');
+  fs.writeFileSync(blackBoxPath, blackBoxContent, 'utf8');
 
   // Record batch event
   try {
     appendBatchEvent(root, {
-      event: 'crime_scene_freeze',
+      event: 'black_box_freeze',
       slice: `Slice ${sliceId}`,
       summary: reason,
       details: stashCreated ? stashMessage : ''
@@ -115,23 +115,26 @@ ${gitDiff || '(no diff)'}
   } catch {}
 
   // 5. Print escalation notice
-  console.log('SLICE_ESCALATED: See .spec/CRIME_SCENE.md');
+  console.log('SLICE_ESCALATED: See .spec/BLACK_BOX.md');
 
   return {
     sliceId,
     cleanSliceId,
     stashMessage,
     stashCreated,
-    crimeScenePath,
+    blackBoxPath,
     reason,
   };
 }
+
+// Backward compatibility alias
+export const freezeCrimeScene = freezeBlackBox;
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const root = resolveRoot();
   const reason = process.argv.slice(2).join(' ').trim() || 'Circuit breaker Strike 2 triggered.';
   try {
-    freezeCrimeScene(root, reason);
+    freezeBlackBox(root, reason);
   } catch (err) {
     console.error(`Freeze failed: ${err.message}`);
     process.exit(1);

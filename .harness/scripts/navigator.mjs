@@ -3,6 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
+export const ATLAS_COORDS_REGEX = /\|\s*Coords:\s*\[([0-9,\s]+)\]/;
+
 export function resolveRoot() {
   return process.env.CLAUDE_PROJECT_DIR || process.cwd();
 }
@@ -24,7 +26,7 @@ export function loadThresholds(root) {
   }
 }
 
-export function parseDeweyIndex(indexPath) {
+export function parseAtlasIndex(indexPath) {
   if (!fs.existsSync(indexPath)) {
     return { entries: new Map(), sections: new Set(), raw: '' };
   }
@@ -33,15 +35,15 @@ export function parseDeweyIndex(indexPath) {
   const sections = new Set();
 
   for (const line of raw.split('\n')) {
-    // Match section headers: ## 100 Work Dispatch
-    const secMatch = line.match(/^##\s*(\d{3})\b\s*(.*)$/);
+    // Match section headers: ## Sector 100 Work Dispatch or ## 100 Work Dispatch
+    const secMatch = line.match(/^##\s*(?:Sector\s*)?(\d{3})\b\s*(.*)$/);
     if (secMatch) {
       sections.add(secMatch[1]);
       continue;
     }
     // Match entry lines:
     // - `110` [.spec/PROGRESS.md](...) — Active slice queue & lock
-    // - `130` `.spec/CRIME_SCENE.md` — Active incident post-mortem & frozen diff
+    // - `130` `.spec/BLACK_BOX.md` — Sector 130 flight-recorder dump on 2-strike failure
     const entryMatch = line.match(/^-\s*`(\d{3})`\s+(?:\[(.*?)\]\((.*?)\)|`([^`]+)`|(\S+))\s*(?:—|-|\s)?\s*(.*)$/);
     if (entryMatch) {
       const code = entryMatch[1];
@@ -60,48 +62,67 @@ export function parseDeweyIndex(indexPath) {
   return { entries, sections, raw };
 }
 
-export function extractDeweyRefs(text) {
-  const refs = new Set();
-  if (!text) return refs;
+// Backward compatibility alias
+export const parseDeweyIndex = parseAtlasIndex;
 
-  // 1. Match Refs: [110, 120, 210] or | Refs: [000, 305]
+export function extractAtlasCoords(text) {
+  const coords = new Set();
+  if (!text) return coords;
+
+  // 1. Match Coords: [110, 120] or | Coords: [000, 305]
+  const coordsMatch = text.matchAll(/Coords:\s*\[([^\]]+)\]/gi);
+  for (const m of coordsMatch) {
+    for (const code of m[1].split(',')) {
+      const clean = code.trim();
+      if (/^\d{3}$/.test(clean)) {
+        coords.add(clean);
+      }
+    }
+  }
+
+  // Fallback: match Refs: [110, 120]
   const refsMatch = text.matchAll(/Refs:\s*\[([^\]]+)\]/gi);
   for (const m of refsMatch) {
     for (const code of m[1].split(',')) {
       const clean = code.trim();
       if (/^\d{3}$/.test(clean)) {
-        refs.add(clean);
+        coords.add(clean);
       }
     }
   }
 
-  // 2. Match bracketed Dewey codes [110], [210] (not followed by '(' which indicates a markdown link)
+  // 2. Match bracketed 3-digit codes [110], [210] (not followed by '(' which indicates a markdown link)
   const bracketMatch = text.matchAll(/\[(\d{3})\](?!\()/g);
   for (const m of bracketMatch) {
-    refs.add(m[1]);
+    coords.add(m[1]);
   }
 
-  // 3. Match Dewey Class 110, Dewey 320
-  const deweyMatch = text.matchAll(/(?:Dewey(?:\s+Class)?)\s+(\d{3})\b/gi);
-  for (const m of deweyMatch) {
-    refs.add(m[1]);
+  // 3. Match Sector 110, Atlas Sector 110, Dewey Class 110, Dewey 320
+  const labelMatch = text.matchAll(/(?:(?:Atlas\s+)?Sector|Dewey(?:\s+Class)?)\s+(\d{3})\b/gi);
+  for (const m of labelMatch) {
+    coords.add(m[1]);
   }
 
-  return refs;
+  return coords;
 }
 
-export function checkDeweyReferences(root) {
+// Backward compatibility alias
+export const extractDeweyRefs = extractAtlasCoords;
+
+export function checkAtlasReferences(root) {
+  const atlasPath = path.join(root, '.spec', 'ATLAS.md');
   const indexPath = path.join(root, '.spec', 'INDEX.md');
-  const index = parseDeweyIndex(indexPath);
+  const targetPath = fs.existsSync(atlasPath) ? atlasPath : indexPath;
+  const index = parseAtlasIndex(targetPath);
   const brokenRefs = [];
   const brokenLinks = [];
 
-  // Known valid Dewey codes in index (entries + section headings)
+  // Known valid codes in index (entries + section headings)
   const validCodes = new Set([...index.entries.keys(), ...index.sections]);
 
-  // Check if targets listed in INDEX.md exist on disk
+  // Check if targets listed in index exist on disk
   for (const [code, entry] of index.entries) {
-    // 130 (.spec/CRIME_SCENE.md) is incident-only/ephemeral
+    // 130 (.spec/BLACK_BOX.md / .spec/CRIME_SCENE.md) is incident-only/ephemeral
     if (code === '130') continue;
     if (entry.target) {
       const targetRel = entry.target.replace(/^file:\/\/[^/]*\//, '').replace(/^\.\//, '');
@@ -128,13 +149,13 @@ export function checkDeweyReferences(root) {
         } else if (f.isFile() && f.name.endsWith('.md')) {
           const rel = path.relative(root, full);
           const content = fs.readFileSync(full, 'utf8');
-          const refs = extractDeweyRefs(content);
+          const refs = extractAtlasCoords(content);
           for (const code of refs) {
             if (!validCodes.has(code)) {
               brokenRefs.push({
                 file: rel,
                 code,
-                reason: `Dewey reference [${code}] not found in .spec/INDEX.md`,
+                reason: `Atlas coordinate [${code}] not found in .spec/ATLAS.md`,
               });
             }
           }
@@ -146,6 +167,9 @@ export function checkDeweyReferences(root) {
 
   return { brokenRefs, brokenLinks };
 }
+
+// Backward compatibility alias
+export const checkDeweyReferences = checkAtlasReferences;
 
 export function checkLineBudgets(root, thresholds) {
   const violations = [];
@@ -197,7 +221,7 @@ export function archiveCompletedSlices(root) {
   }
 
   fs.mkdirSync(path.dirname(historyPath), { recursive: true });
-  let historyText = fs.existsSync(historyPath) ? fs.readFileSync(historyPath, 'utf8') : '# Completed Slice Archive (Dewey Class 120)\n\n';
+  let historyText = fs.existsSync(historyPath) ? fs.readFileSync(historyPath, 'utf8') : '# Completed Slice Archive (Atlas Sector 120)\n\n';
 
   if (!historyText.endsWith('\n')) historyText += '\n';
   historyText += `\n## Archived Slices (${new Date().toISOString().slice(0, 10)})\n`;
@@ -211,15 +235,15 @@ export function archiveCompletedSlices(root) {
   return { archived: completed.length, remaining: remaining.length };
 }
 
-export function librarianCheck(root) {
+export function navigatorCheck(root) {
   const thresholds = loadThresholds(root);
   const budgetViolations = thresholds ? checkLineBudgets(root, thresholds) : [];
-  const { brokenRefs, brokenLinks } = checkDeweyReferences(root);
+  const { brokenRefs, brokenLinks } = checkAtlasReferences(root);
 
   const errors = [
     ...budgetViolations.map((v) => `Line budget violation: ${v.reason}`),
-    ...brokenRefs.map((r) => `Broken Dewey reference: ${r.reason} (${r.file})`),
-    ...brokenLinks.map((l) => `Broken INDEX link: ${l.reason} (code ${l.code})`),
+    ...brokenRefs.map((r) => `Broken Atlas coordinate reference: ${r.reason} (${r.file})`),
+    ...brokenLinks.map((l) => `Broken ATLAS link: ${l.reason} (code ${l.code})`),
   ];
 
   return {
@@ -231,30 +255,33 @@ export function librarianCheck(root) {
   };
 }
 
+// Backward compatibility alias
+export const librarianCheck = navigatorCheck;
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const root = resolveRoot();
   const args = process.argv.slice(2);
 
   if (args.includes('--archive') || args.includes('--compact')) {
     const res = archiveCompletedSlices(root);
-    console.log(`LIBRARIAN: Archived ${res.archived} completed slices to .spec/archive/HISTORY.md.`);
+    console.log(`NAVIGATOR: Archived ${res.archived} completed slices to .spec/archive/HISTORY.md.`);
   }
 
   if (args.includes('--check')) {
-    const check = librarianCheck(root);
+    const check = navigatorCheck(root);
     if (!check.ok) {
-      console.error(`✗ LIBRARIAN CHECK FAILED: ${check.errors.length} error(s) found:`);
+      console.error(`✗ NAVIGATOR CHECK FAILED: ${check.errors.length} error(s) found:`);
       for (const err of check.errors) {
         console.error(`  - ${err}`);
       }
       process.exit(1);
     }
-    console.log('✓ LIBRARIAN CHECK: PASS (0 errors). All Dewey references and line budgets valid.');
+    console.log('✓ NAVIGATOR CHECK: PASS (0 errors). All Atlas coordinates and line budgets valid.');
     process.exit(0);
   }
 
   if (!args.includes('--archive') && !args.includes('--compact') && !args.includes('--check')) {
-    console.log('Usage: node .harness/scripts/librarian.mjs [--check] [--archive]');
+    console.log('Usage: node .harness/scripts/navigator.mjs [--check] [--archive]');
     process.exit(0);
   }
 }

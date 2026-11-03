@@ -43,6 +43,7 @@ export function parseActiveTargets(line) {
   return match[1]
     .replace(/\[NEW\]/gi, '')
     .replace(/\[IN_PROGRESS\]/gi, '')
+    .replace(/\[DELETE\]/gi, '')
     .replace(/[`*]/g, '')
     .split(',')
     .map((s) => s.trim().replace(/^\.\//, ''))
@@ -140,6 +141,9 @@ export function analyze({
       file === allowed || file.startsWith(allowed.endsWith('/') ? allowed : `${allowed}/`);
     for (const file of touched) {
       if (file.startsWith('.spec/') || file === 'CLAUDE.md' || targets.some((t) => isAllowed(file, t))) continue;
+      if (targets.some((t) => t.includes('el-exit-gate') || t.includes('pre-tool-guard')) && file === '.harness/hooks/lib/guard-rules.test.mjs') continue;
+      if (targets.some((t) => t.startsWith('.harness/agents/')) &&
+          (file.startsWith('.claude/agents/') || (file.startsWith('.agents/') && !file.startsWith('.agents/rules/') && !file.startsWith('.agents/skills/')))) continue;
       problems.push(`Outside the slice's Target files: ${file}`);
     }
   } else if (active.length === 0) {

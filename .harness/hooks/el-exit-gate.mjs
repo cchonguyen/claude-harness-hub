@@ -1,11 +1,13 @@
 #!/usr/bin/env node
-// SubagentStop Exit Gate for Tier 1 Elephant
-// Verifies .spec/PROGRESS.md has valid Target files:, valid Refs:, and a Verify: command for every slice.
+// SubagentStop Exit Gate for Tier 1 el-architect
+// Verifies .spec/PROGRESS.md has valid Target files:, valid Coords:, and a Verify: command for every slice.
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolveRoot } from './lib/vibe.mjs';
+
+export const ATLAS_COORDS_REGEX = /\|\s*Coords:\s*\[([0-9,\s]+)\]/;
 
 export function validateProgressSlices(progressContent) {
   const errors = [];
@@ -49,14 +51,14 @@ export function validateProgressSlices(progressContent) {
       }
     }
 
-    // 2. Refs:
-    const refsMatch = slice.rest.match(/Refs:\s*(\[[^\]]+\]|[^|\n]+)/i);
-    if (!refsMatch) {
-      errors.push(`${label}: Missing "Refs:" declaration.`);
+    // 2. Coords: (or fallback Refs:)
+    const coordsMatch = slice.rest.match(/(?:Coords|Refs):\s*(\[[^\]]+\]|[^|\n]+)/i);
+    if (!coordsMatch) {
+      errors.push(`${label}: Missing "Coords:" declaration.`);
     } else {
-      const refsStr = refsMatch[1].replace(/[[\]`]/g, '').trim();
-      if (!refsStr) {
-        errors.push(`${label}: "Refs:" declaration is empty.`);
+      const coordsStr = coordsMatch[1].replace(/[[\]`]/g, '').trim();
+      if (!coordsStr) {
+        errors.push(`${label}: "Coords:" declaration is empty.`);
       }
     }
 
@@ -99,8 +101,8 @@ if (isDirectRun) {
     ''
   ).toLowerCase();
 
-  // If invoked with a known non-elephant subagent, pass through
-  if (agent && !agent.includes('elephant') && !agent.includes('architect')) {
+  // If invoked with a known non-architect subagent, pass through
+  if (agent && !agent.includes('elephant') && !agent.includes('architect') && !agent.includes('el-')) {
     process.exit(0);
   }
 
@@ -110,7 +112,7 @@ if (isDirectRun) {
     : path.join(root, '.spec', 'PROGRESS.md');
 
   if (!fs.existsSync(progressPath)) {
-    console.error('ELEPHANT EXIT GATE BLOCK: .spec/PROGRESS.md not found.');
+    console.error('EL EXIT GATE BLOCK: .spec/PROGRESS.md not found.');
     process.exit(2);
   }
 
@@ -118,14 +120,14 @@ if (isDirectRun) {
   const result = validateProgressSlices(content);
 
   if (!result.valid) {
-    console.error('ELEPHANT EXIT GATE BLOCK: Validation failed for .spec/PROGRESS.md:');
+    console.error('EL EXIT GATE BLOCK: Validation failed for .spec/PROGRESS.md:');
     for (const err of result.errors) {
       console.error(`- ${err}`);
     }
-    console.error('All slices declared by Tier 1 Elephant must specify Target files, Refs, and a Verify command.');
+    console.error('All slices declared by Tier 1 Architect must specify Target files, Coords, and a Verify command.');
     process.exit(2);
   }
 
-  console.log('ELEPHANT EXIT GATE PASS: All declared slices in .spec/PROGRESS.md have valid Target files, Refs, and Verify commands.');
+  console.log('EL EXIT GATE PASS: All declared slices in .spec/PROGRESS.md have valid Target files, Coords, and Verify commands.');
   process.exit(0);
 }

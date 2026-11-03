@@ -17,6 +17,7 @@ export function parseActiveTargets(line) {
   return match[1]
     .replace(/\[NEW\]/gi, '')
     .replace(/\[IN_PROGRESS\]/gi, '')
+    .replace(/\[DELETE\]/gi, '')
     .replace(/[`*]/g, '')
     .split(',')
     .map((s) => s.trim().replace(/^\.\//, ''))
@@ -32,6 +33,19 @@ export function isTargetMatch(relFile, targets) {
     '.spec/STATUS_BATCH.jsonl',
   ];
   if (trackingFiles.includes(norm)) return true;
+
+  // Allow hook test file when hook targets are modified
+  if ((targets.includes('.harness/hooks/el-exit-gate.mjs') || targets.includes('.harness/hooks/pre-tool-guard.mjs')) &&
+      norm === '.harness/hooks/lib/guard-rules.test.mjs') {
+    return true;
+  }
+
+  // Allow synced agent files when .harness/agents/ templates are targets
+  if (targets.some((t) => t.startsWith('.harness/agents/')) &&
+      (norm.startsWith('.claude/agents/') || (norm.startsWith('.agents/') && !norm.startsWith('.agents/rules/') && !norm.startsWith('.agents/skills/')))) {
+    return true;
+  }
+
   return targets.some((target) => {
     const clean = target.replace(/\\/g, '/').replace(/^\.\//, '');
     if (!clean) return false;
@@ -66,7 +80,7 @@ export function finishSlice(root, commitMsg, options = {}) {
     throw new Error('No slice is marked [IN_PROGRESS] in .spec/PROGRESS.md.');
   }
   const activeLine = lines[activeIdx];
-  const sliceIdMatch = activeLine.match(/\*\*Slice\s+([^*]+)\*\*/);
+  const sliceIdMatch = activeLine.match(/\*\*Slice\s+([^:*]+)/i);
   const sliceId = sliceIdMatch ? sliceIdMatch[1].trim() : 'active';
 
   // Scope Neutrality (SYSTEM_SPEC 5.B): Read Target files strictly from HEAD:.spec/PROGRESS.md to prevent

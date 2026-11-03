@@ -22,7 +22,13 @@ const ACTIVE_TASK = /^\s*-\s*\[.\].*\[IN_PROGRESS\]/;
 export const activeTargets = (line) => {
   const match = line?.match(/Target files:\s*([^|\n]+)/i);
   if (!match) return [];
-  return match[1].replace(/[`*]/g, '').split(',').map((s) => s.trim().replace(/^\.\//, '')).filter(Boolean);
+  return match[1]
+    .replace(/\[NEW\]/gi, '')
+    .replace(/\[DELETE\]/gi, '')
+    .replace(/[`*]/g, '')
+    .split(',')
+    .map((s) => s.trim().replace(/^\.\//, ''))
+    .filter(Boolean);
 };
 
 export function resolveRole(event = {}) {
@@ -38,10 +44,10 @@ export function resolveRole(event = {}) {
     ''
   ).toLowerCase();
 
-  if (agentField.includes('goldfish')) return 'goldfish';
-  if (agentField.includes('elephant') || agentField.includes('architect')) return 'elephant';
-  if (agentField.includes('librarian')) return 'librarian';
-  if (agentField.includes('git-clerk') || agentField.includes('gitclerk')) return 'git-clerk';
+  if (agentField.includes('goldfish') || agentField.includes('gf-')) return 'goldfish';
+  if (agentField.includes('elephant') || agentField.includes('architect') || agentField.includes('el-')) return 'elephant';
+  if (agentField.includes('librarian') || agentField.includes('navigator')) return 'librarian';
+  if (agentField.includes('git-clerk') || agentField.includes('gitclerk') || agentField.includes('gf-clerk')) return 'git-clerk';
   return 'coordinator';
 }
 
@@ -53,15 +59,19 @@ export function loadThresholds(projectRoot) {
     } catch {}
   }
   return {
-    fast_path: {
+    fa_fast_path: {
+      max_source_reads: 3,
       max_reads: 3,
       max_searches: 1,
       max_edits: 1,
+      max_single_file_edit_lines: 25,
       max_edit_lines: 25
     },
-    circuit_breaker: {
-      max_strikes: 2,
+    gf_circuit_breaker: {
+      max_exploratory_searches: 2,
       max_searches: 2,
+      max_test_failure_strikes: 2,
+      max_strikes: 2,
       max_mutating_calls: 15
     }
   };
@@ -85,20 +95,26 @@ export function checkFastPathBudget({ role, toolName, targetFile, editLines = 0,
     return { allowed: true };
   }
 
-  const fastPath = thresholds.fast_path || {
+  const fastPath = thresholds.fa_fast_path || thresholds.fast_path || thresholds.shepherd_fast_path || {
+    max_source_reads: 3,
     max_reads: 3,
     max_searches: 1,
     max_edits: 1,
+    max_single_file_edit_lines: 25,
     max_edit_lines: 25
   };
+  const maxReads = fastPath.max_source_reads ?? fastPath.max_reads ?? 3;
+  const maxSearches = fastPath.max_searches ?? 1;
+  const maxEdits = fastPath.max_edits ?? 1;
+  const maxEditLines = fastPath.max_single_file_edit_lines ?? fastPath.max_edit_lines ?? 25;
 
   if (['Read', 'View'].includes(toolName)) {
     if (isSourceFile(targetFile)) {
       const nextCount = (telemetry.coordinator_reads || 0) + 1;
-      if (nextCount > fastPath.max_reads) {
+      if (nextCount > maxReads) {
         return {
           allowed: false,
-          reason: `FAST-PATH BUDGET EXCEEDED: Coordinator attempted ${nextCount} source reads (max ${fastPath.max_reads}). Delegate this task to goldfish-coder or elephant.`
+          reason: `FAST-PATH BUDGET EXCEEDED: Coordinator attempted ${nextCount} source reads (max ${maxReads}). Delegate this task to gf-coder or el-architect.`
         };
       }
     }
@@ -106,10 +122,10 @@ export function checkFastPathBudget({ role, toolName, targetFile, editLines = 0,
 
   if (['Grep', 'Glob', 'WebSearch'].includes(toolName)) {
     const nextCount = (telemetry.coordinator_searches || 0) + 1;
-    if (nextCount > fastPath.max_searches) {
+    if (nextCount > maxSearches) {
       return {
         allowed: false,
-        reason: `FAST-PATH BUDGET EXCEEDED: Coordinator attempted ${nextCount} searches (max ${fastPath.max_searches}). Delegate this task to goldfish-coder or elephant.`
+        reason: `FAST-PATH BUDGET EXCEEDED: Coordinator attempted ${nextCount} searches (max ${maxSearches}). Delegate this task to gf-coder or el-architect.`
       };
     }
   }
@@ -117,16 +133,16 @@ export function checkFastPathBudget({ role, toolName, targetFile, editLines = 0,
   if (['Edit', 'Write', 'NotebookEdit'].includes(toolName)) {
     if (isSourceFile(targetFile)) {
       const nextCount = (telemetry.coordinator_edits || 0) + 1;
-      if (nextCount > fastPath.max_edits) {
+      if (nextCount > maxEdits) {
         return {
           allowed: false,
-          reason: `FAST-PATH BUDGET EXCEEDED: Coordinator attempted ${nextCount} source edits (max ${fastPath.max_edits}). Fast-path allows at most 1 single-file edit. Delegate to goldfish-coder.`
+          reason: `FAST-PATH BUDGET EXCEEDED: Coordinator attempted ${nextCount} source edits (max ${maxEdits}). Fast-path allows at most 1 single-file edit. Delegate to gf-coder.`
         };
       }
-      if (editLines > fastPath.max_edit_lines) {
+      if (editLines > maxEditLines) {
         return {
           allowed: false,
-          reason: `FAST-PATH BUDGET EXCEEDED: Coordinator edit has ${editLines} lines (max ${fastPath.max_edit_lines}). Delegate to goldfish-coder.`
+          reason: `FAST-PATH BUDGET EXCEEDED: Coordinator edit has ${editLines} lines (max ${maxEditLines}). Delegate to gf-coder.`
         };
       }
     }
@@ -137,25 +153,27 @@ export function checkFastPathBudget({ role, toolName, targetFile, editLines = 0,
 
 export function checkSearchBudget({ role, telemetry = {}, thresholds = {} }) {
   if (role === 'goldfish') {
-    const maxSearches = thresholds.circuit_breaker?.max_searches ?? 2;
+    const cb = thresholds.gf_circuit_breaker || thresholds.circuit_breaker || thresholds.goldfish_circuit_breaker || {};
+    const maxSearches = cb.max_exploratory_searches ?? cb.max_searches ?? 2;
     const nextCount = (telemetry.goldfish_searches || 0) + 1;
     if (nextCount > maxSearches) {
       return {
         allowed: false,
         count: nextCount,
-        reason: `CIRCUIT BREAKER: Goldfish search budget exceeded (${nextCount} searches, max ${maxSearches}). Escalate to Tier 1 Elephant or freeze crime scene.`
+        reason: `CIRCUIT BREAKER: Goldfish search budget exceeded (${nextCount} searches, max ${maxSearches}). Escalate to Tier 1 Architect or freeze black box.`
       };
     }
   }
 
   if (role === 'coordinator') {
-    const maxSearches = thresholds.fast_path?.max_searches ?? 1;
+    const fp = thresholds.fa_fast_path || thresholds.fast_path || thresholds.shepherd_fast_path || {};
+    const maxSearches = fp.max_searches ?? 1;
     const nextCount = (telemetry.coordinator_searches || 0) + 1;
     if (nextCount > maxSearches) {
       return {
         allowed: false,
         count: nextCount,
-        reason: `FAST-PATH BUDGET EXCEEDED: Coordinator attempted ${nextCount} searches (max ${maxSearches}). Delegate this task to goldfish-coder or elephant.`
+        reason: `FAST-PATH BUDGET EXCEEDED: Coordinator attempted ${nextCount} searches (max ${maxSearches}). Delegate this task to gf-coder or el-architect.`
       };
     }
   }
