@@ -232,6 +232,8 @@ export function analyze({
       if (
         file.startsWith('.spec/') ||
         file === 'CLAUDE.md' ||
+        // A verified hub sync changes only hub-owned engine files and their manifest; the hash check above covers them
+        (hubSync && (isEngineFile(file) || file === MANAGED || file === SETTINGS)) ||
         ((file === 'package.json' || file.endsWith('/package.json')) && isPackageJsonVersionOnly(diff.get(file))) ||
         targets.some((t) => isAllowed(file, t))
       ) continue;
