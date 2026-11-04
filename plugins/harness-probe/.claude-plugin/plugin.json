@@ -1,0 +1,6 @@
+{
+  "name": "harness-probe",
+  "version": "0.0.1",
+  "description": "Probe plugin for the harness-in-project-threads audit. Writes marker files and refuses one marked path.",
+  "author": { "name": "cchonguyen" }
+}

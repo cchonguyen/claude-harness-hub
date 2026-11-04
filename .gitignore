@@ -20,3 +20,6 @@ dist/
 .claude/settings.local.json
 .harness-backup/
 *.log
+
+# harness-probe plugin marker files
+.harness-probe/

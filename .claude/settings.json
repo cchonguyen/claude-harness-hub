@@ -75,6 +75,7 @@
     ],
     "SubagentStop": [
       {
+        "matcher": "el-architect",
         "hooks": [
           {
             "type": "command",
