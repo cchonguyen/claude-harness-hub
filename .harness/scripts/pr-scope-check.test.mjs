@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { analyze, formatJsonVerdict, parseDiff, parseNameStatus, isCommentLine, ASSERTION, SKIP_MARK, isPackageJsonVersionOnly } from './pr-scope-check.mjs';
+import { analyze, formatJsonVerdict, parseDiff, parseNameStatus, isCommentLine, ASSERTION, SKIP_MARK, isPackageJsonVersionOnly, isAdditiveSupabaseMigration } from './pr-scope-check.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const SCRIPT = path.join(here, 'pr-scope-check.mjs');
@@ -484,4 +484,18 @@ test('SKIP_MARK matches modern framework skip patterns when uncommented', () => 
   for (const line of skipPatterns) {
     assert.ok(SKIP_MARK.test(line), `Expected SKIP_MARK to match: ${line}`);
   }
+});
+
+test('an additive Supabase migration does not trip the migrations wire; other migration edits still do', () => {
+  const added = testDiff('supabase/migrations/0034_edition_fact_sources.sql', ['alter table event_editions add column if not exists fact_source_note text;']);
+  const r = analyze({ changed: ['supabase/migrations/0034_edition_fact_sources.sql'], diff: added, progress: '' });
+  assert.equal(r.tripwireFired, false);
+  assert.equal(isAdditiveSupabaseMigration('supabase/migrations/0034_edition_fact_sources.sql', added), true);
+
+  const rewritten = testDiff('supabase/migrations/0030_performance_set.sql', ['select 1;'], ['select 0;']);
+  const r2 = analyze({ changed: ['supabase/migrations/0030_performance_set.sql'], diff: rewritten, progress: '' });
+  assert.equal(r2.tripwireFired, true);
+
+  const other = testDiff('db/migrations/001.sql', ['select 1;']);
+  assert.equal(isAdditiveSupabaseMigration('db/migrations/001.sql', other), false);
 });

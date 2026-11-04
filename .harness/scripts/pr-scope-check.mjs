@@ -29,6 +29,16 @@ export function isPackageJsonVersionOnly(fileDiff) {
   return added.every((l) => VERSION_LINE.test(l)) && removed.every((l) => VERSION_LINE.test(l));
 }
 
+// Supabase migrations are a Red tripwire, except a new or additive-only SQL file under supabase/migrations/.
+// An edit that removes lines from an existing migration still trips the wire. Charlie approved this exemption
+// for the Concert Tracker spoke (2026-11-04); other paths under migrations folders still trip.
+export function isAdditiveSupabaseMigration(file, diff) {
+  if (!/^supabase\/migrations\/[^/]+\.sql$/.test(file)) return false;
+  const fileDiff = diff && diff.get ? diff.get(file) : null;
+  if (!fileDiff) return false;
+  return (fileDiff.removed || []).length === 0;
+}
+
 // Red tripwires: any match makes the slice Red, whatever colour the slice line carries
 export const TRIPWIRES = [
   {
@@ -41,7 +51,10 @@ export const TRIPWIRES = [
       return true;
     },
   },
-  { name: 'migrations folder', test: (f) => /(^|\/)migrations\//.test(f) },
+  {
+    name: 'migrations folder',
+    test: (f, diff) => /(^|\/)migrations\//.test(f) && !isAdditiveSupabaseMigration(f, diff),
+  },
   { name: 'schema file', test: (f) => /schema/i.test(f) },
   { name: 'auth file', test: (f) => /(^|[/._-])auth([/._-]|$)/i.test(f) },
   { name: 'env file', test: (f) => /(^|\/)\.env[^/]*$/.test(f) },
