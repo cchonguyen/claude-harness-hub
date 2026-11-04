@@ -1,16 +1,15 @@
 ---
-description: Evaluate complexity threshold and execute the next pending task slice in .spec/PROGRESS.md; chain up to 3 low-risk Green slices
-argument-hint: [optional: haiku|sonnet]
-allowed-tools: Bash(node *)
+description: Implement the next pending slice in .spec/PROGRESS.md by hand, following CLAUDE.md. No subagents, no hooks.
+argument-hint: [optional: slice id, e.g. 7.1]
+allowed-tools: Bash(node *), Bash(git *), Bash(npm *)
 ---
-Tier gate status: !`node "${CLAUDE_PROJECT_DIR:-.}/.harness/scripts/evaluate-upshift.mjs" implement $ARGUMENTS`
+Implement the slice named by `$ARGUMENTS`, or the first pending slice if none is given. Do the work in this session. Do not look for or spawn subagents, because threads cannot load them. The rules are in CLAUDE.md.
 
-0. Stop check: if the tier gate status above begins with `⚠ UPSHIFT_THRESHOLD_REACHED`, STOP immediately without spawning any subagent and output ONLY the `Needed from you:` block printed above. Otherwise, run `git ls-remote --tags origin harness-main-red`; if it prints a line, output `✗ Main is red: fix main first (open issue "RED: main failed checks")` and stop.
-1. Anchor: the working tree must be clean. If `.spec/` has uncommitted edits, commit them first. The commit at HEAD is the anchor for this chain.
-2. Spawn the subagent specified by the tier gate (`engineer` on Haiku by default, or `engineer-sonnet` ONLY when `/implement sonnet` was explicitly passed) to lock and execute the next pending slice in `.spec/PROGRESS.md`. Keep the slice's colour tag as written.
-3. Finish the slice in a single tool call: run `node .harness/scripts/finish-slice.mjs "<commit message>"`. This automatically verifies tests, marks `[x]` in `.spec/PROGRESS.md`, updates `.spec/SESSION_HANDOFF.md`, and commits with `Referee-*` trailers. Push the branch and open or update its PR. Wait for CI on that commit.
-4. Local audit: run one scope and assertion check with the `auditor` subagent (Haiku) and `node .harness/scripts/pr-scope-check.mjs`. Any blocking finding stops the chain. (Never silently upshift to Sonnet/Opus for routine slice verification).
-5. Chain rule (SYSTEM_SPEC 4.C.4 & 5.B.4): continue to the next pending slice from step 2 only when all of these hold: the slice is Green; the chain has done fewer than 3 slices; CI is green on the pushed commit; step 4 found no blocking finding; the milestone is not complete; and no natural lull was signaled by `finish-slice.mjs`. Otherwise stop.
-7. A Yellow or Red slice never chains. A failed check turns the chain Yellow and stops it. Yellow gets one self-remediation attempt, then `git restore --source=<anchor> -- <target files>` and a decision card. When a slice ends Yellow or Red, append a line under `## Pending Rule Candidates — not in force` in `.claude/project-rules.md` (keep at most 10; drop the oldest).
-8. At a milestone boundary, update `.spec/OVERVIEW.md`.
-9. Output a 1-line receipt per slice (all detailed telemetry is batched in `.spec/STATUS_BATCH.jsonl`). If the chain stopped, add the reason on the same line.
+1. Start clean. Run `git status --short`. If `.spec/` has uncommitted edits, commit them first so the slice starts from a clean tree.
+2. Pick the slice. Use the named id, or the first `- [ ]` or `[PENDING]` slice in `.spec/PROGRESS.md`. If its `Target files:` are missing or unclear, end with a `Needed from you:` block asking for them. Do not guess.
+3. Lock the slice. Change its line to `[IN_PROGRESS]` in `.spec/PROGRESS.md`, and commit that change alone as `docs(spec): mark Slice <id> [IN_PROGRESS]`.
+4. Build it. Edit only the listed `Target files:`. Honour the colour tag: `[UI / VISUAL]` needs typecheck only, `[CORE / DATA]` needs tests written and passing.
+5. Verify once after the final edit, with both commands in CLAUDE.md under Verification. If the same error repeats twice, stop and ask.
+6. Finish with `node .harness/scripts/finish-slice.mjs "<commit message>"`. Then run `node .harness/scripts/pr-scope-check.mjs origin/main HEAD` and report any findings.
+7. Push with `git push -u origin <branch>`. On network errors only, retry up to 4 times with 2, 4, 8 and 16 second waits. Open the pull request as ready for review. Put the verification output in its description, then follow the Git and pull requests section of CLAUDE.md.
+8. Reply with one receipt line: `✓ Slice <id> committed on <branch>: <PR link>`. If anything stopped the work, add the reason on that line.
