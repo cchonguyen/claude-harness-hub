@@ -138,14 +138,22 @@ export function analyze({
   // A slice PR usually marks its slice [x] by the time it opens, so fall back to slice lines this PR marks done.
   const active = progress.split('\n').filter((l) => ACTIVE_TASK.test(l));
   const doneInPr = (diff.get('.spec/PROGRESS.md')?.added ?? []).filter((l) => DONE_SLICE.test(l));
+  // A finish-slice commit promotes the next pending slice to [IN_PROGRESS]. When this PR changes none of that
+  // slice's Target files, the marker is only the next slice's placeholder, so the PR's done slices are checked.
+  const activeTargetsTouched = (line) => parseActiveTargets(line).some((t) =>
+    changed.some((file) => file === t || file.startsWith(t.endsWith('/') ? t : `${t}/`)));
   let sliceLines = [];
   if (active.length > 1) {
     problems.push(`${active.length} slices are [IN_PROGRESS]. The harness allows only one.`);
-  } else if (active.length === 1) {
+  } else if (active.length === 1 && (doneInPr.length === 0 || activeTargetsTouched(active[0]))) {
     sliceLines = active;
   } else if (doneInPr.length > 0) {
     sliceLines = doneInPr;
-    notes.push(`No slice is [IN_PROGRESS]. Checking the ${doneInPr.length} slice(s) this PR marks done.`);
+    notes.push(active.length === 1
+      ? `The [IN_PROGRESS] slice has no changed Target files in this PR. Checking the ${doneInPr.length} slice(s) this PR marks done.`
+      : `No slice is [IN_PROGRESS]. Checking the ${doneInPr.length} slice(s) this PR marks done.`);
+  } else if (active.length === 1) {
+    sliceLines = active;
   }
 
   let sliceType = null;

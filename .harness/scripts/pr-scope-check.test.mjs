@@ -485,3 +485,28 @@ test('SKIP_MARK matches modern framework skip patterns when uncommented', () => 
     assert.ok(SKIP_MARK.test(line), `Expected SKIP_MARK to match: ${line}`);
   }
 });
+
+test('a stale [IN_PROGRESS] placeholder with no changed targets does not block a done slice in the PR', () => {
+  // finish-slice promoted the next slice (targets src/next/). This PR finishes Slice 9 (targets src/foo.js).
+  const doneLine = '- [x] **Slice 9** `[YELLOW][CORE / DATA]`: thing — Target files: `src/foo.js`, `src/foo.test.js`';
+  const nextLine = '- [ ] **Slice 10** [IN_PROGRESS] `[GREEN][CORE / DATA]`: next — Target files: `src/next/x.js`';
+  const diff = new Map([['.spec/PROGRESS.md', { added: [doneLine, nextLine], removed: [] }]]);
+  const r = analyze({
+    changed: ['.spec/PROGRESS.md', 'src/foo.js', 'src/foo.test.js'],
+    diff: new Map([...diff, ['src/foo.js', { added: [], removed: [] }], ['src/foo.test.js', { added: ['expect(1).toBe(1);'], removed: [] }]]),
+    progress: doneLine + '\n' + nextLine + '\n',
+  });
+  assert.equal(r.sliceType, 'CORE / DATA');
+  assert.ok(!r.problems.some((p) => p.includes("Outside the slice's Target files")), r.problems.join('; '));
+  assert.ok(r.notes.some((n) => n.includes('no changed Target files')));
+});
+
+test('an [IN_PROGRESS] slice whose targets this PR changes still blocks out-of-scope files', () => {
+  const activeLine = '- [ ] **Slice 10** [IN_PROGRESS] `[GREEN][CORE / DATA]`: next — Target files: `src/next/x.js`';
+  const r = analyze({
+    changed: ['src/next/x.js', 'src/other.js'],
+    diff: new Map([['src/next/x.js', { added: ['expect(1).toBe(1);'], removed: [] }], ['src/other.js', { added: [], removed: [] }]]),
+    progress: activeLine + '\n',
+  });
+  assert.ok(r.problems.some((p) => p.includes("Outside the slice's Target files: src/other.js")));
+});
