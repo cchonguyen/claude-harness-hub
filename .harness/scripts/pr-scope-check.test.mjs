@@ -546,3 +546,29 @@ test('an [IN_PROGRESS] slice whose targets this PR changes still blocks out-of-s
   });
   assert.ok(r.problems.some((p) => p.includes("Outside the slice's Target files: src/other.js")));
 });
+
+test('a verified hub sync is not flagged as outside an [IN_PROGRESS] slice targets', () => {
+  const activeLine = '- [ ] **Slice 8.7** [IN_PROGRESS] `[GREEN][CORE / DATA]`: next — Target files: `src/next/x.js`';
+  const changed = ['.harness/scripts/pr-scope-check.mjs', '.harness/managed.json'];
+  const r = analyze({
+    changed,
+    diff: new Map(changed.map((f) => [f, { added: [], removed: [] }])),
+    progress: activeLine + '\n',
+    strict: true,
+    hubSync: true,
+  });
+  assert.ok(!r.problems.some((p) => p.includes("Outside the slice's Target files")), r.problems.join('; '));
+});
+
+test('a hub-sync PR that also changes a non-engine file is still flagged outside the slice targets', () => {
+  const activeLine = '- [ ] **Slice 8.7** [IN_PROGRESS] `[GREEN][CORE / DATA]`: next — Target files: `src/next/x.js`';
+  const changed = ['.harness/scripts/pr-scope-check.mjs', '.harness/managed.json', 'src/other.js'];
+  const r = analyze({
+    changed,
+    diff: new Map(changed.map((f) => [f, { added: [], removed: [] }])),
+    progress: activeLine + '\n',
+    strict: true,
+    hubSync: true,
+  });
+  assert.ok(r.problems.some((p) => p.includes("Outside the slice's Target files: src/other.js")));
+});
