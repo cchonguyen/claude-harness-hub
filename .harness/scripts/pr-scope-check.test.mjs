@@ -499,3 +499,25 @@ test('an additive Supabase migration does not trip the migrations wire; other mi
   const other = testDiff('db/migrations/001.sql', ['select 1;']);
   assert.equal(isAdditiveSupabaseMigration('db/migrations/001.sql', other), false);
 });
+
+test('strict: the four sync-delivered gate files raise no tripwire or engine problem', () => {
+  const changed = [
+    '.github/workflows/harness-slice-gate.yml',
+    '.github/workflows/harness-referee-watch.yml',
+    '.harness/scripts/ci-gate.mjs',
+    '.harness/scripts/ci-gate.test.mjs',
+  ];
+  const r = analyze({ changed, strict: true, hubSync: false });
+  assert.deepEqual(r.problems, []);
+  assert.ok(r.notes.some((n) => n.includes('.harness/scripts/ci-gate.mjs') && n.includes('not verified against the hub')));
+});
+
+test('strict: other workflow files still trip the CI workflow tripwire', () => {
+  const r = analyze({ changed: ['.github/workflows/ci.yml'], strict: true, hubSync: false });
+  assert.ok(r.problems.some((p) => p.includes('Red tripwire (CI workflow): .github/workflows/ci.yml')));
+});
+
+test('strict: other engine files still count as spoke changes to the hub-owned engine', () => {
+  const r = analyze({ changed: ['.harness/scripts/pr-scope-check.mjs'], strict: true, hubSync: false });
+  assert.ok(r.problems.some((p) => p.includes('Spoke changed an engine file') && p.includes('pr-scope-check.mjs')));
+});
