@@ -1,6 +1,13 @@
 # Harness Hub: rules for Claude Code threads
 
-These rules load into every thread. Hooks, subagents and agent-only slash commands do not run in a thread, so do each step yourself, in this session.
+These rules load into every thread. Repo `.claude/` hooks, agents and commands never load in a project thread. The `harness` plugin brings the agents and hooks instead, installed by the cloud environment's setup script (`plugins/harness/setup-script.sh`).
+
+## Subagents
+- Check the Agent tool's list for `harness:gf-coder`. If it is missing, the plugin is not installed: do each step yourself and say so once.
+- Slice `[IN_PROGRESS]` with clear `Target files:`: dispatch `harness:gf-coder` with the slice line and the exact verify command. You review its report, then run verification and finish the slice yourself.
+- Requirements unclear, `Target files:` unknown, or `.spec/BLACK_BOX.md` exists: dispatch `harness:el-architect`.
+- Exploring unfamiliar code: dispatch `harness:gf-navigator`.
+- The plugin's hooks enforce a fast-path budget in the main thread: 3 source reads, 1 search, 1 edit of at most 25 lines. A `FAST-PATH BUDGET EXCEEDED` block means delegate. Never work around it with Bash.
 
 ## Working style
 - Reply with the result first. Use short sentences and no filler.
@@ -16,7 +23,7 @@ These rules load into every thread. Hooks, subagents and agent-only slash comman
 
 ## Verification
 Run both before every commit, once after the final edit:
-1. `node --test .harness/hooks/lib/*.test.mjs .harness/scripts/*.test.mjs .harness/scripts/lib/*.test.mjs`
+1. `node --test plugins/harness/test/run.test.mjs .harness/hooks/lib/*.test.mjs .harness/scripts/*.test.mjs .harness/scripts/lib/*.test.mjs`
 2. `npm run typecheck --silent && npm run lint --silent`
 
 Report the actual output. Do not say a check passed unless you ran it in this session.
