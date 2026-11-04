@@ -1,0 +1,11 @@
+{
+  "name": "harness-hub",
+  "owner": { "name": "cchonguyen" },
+  "plugins": [
+    {
+      "name": "harness-probe",
+      "source": "./plugins/harness-probe",
+      "description": "Throwaway probe: checks whether plugin agents, hooks and refusals load in a Claude project thread."
+    }
+  ]
+}

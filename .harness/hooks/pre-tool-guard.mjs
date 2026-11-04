@@ -33,6 +33,7 @@ export const activeTargets = (line) => {
 
 export function resolveRole(event = {}) {
   const agentField = String(
+    event.agent_type ||
     event.agent ||
     event.subagent ||
     event.agent_name ||
