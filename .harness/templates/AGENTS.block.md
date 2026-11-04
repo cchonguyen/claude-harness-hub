@@ -11,7 +11,7 @@ Your mission is to coordinate work with minimal context bloat. Do NOT explore ra
 
 ### 2. Quiet Verification Commands (Mandatory)
 - Unit Tests: `node --test .harness/hooks/lib/*.test.mjs .harness/scripts/*.test.mjs .harness/scripts/lib/*.test.mjs`
-- Typecheck & Lint: `npm run typecheck --silent && npm run lint --silent`
+- Typecheck & Lint: run the commands listed under `Project-Specific Commands` in `CLAUDE.md`.
 - Navigator Checkpoint (`finish-slice.mjs` -> `navigator.mjs`): `node .harness/scripts/finish-slice.mjs "<msg>"` -> `node .harness/scripts/navigator.mjs --check`
 - Scope & PR Gate: `node .harness/scripts/pr-scope-check.mjs`
 

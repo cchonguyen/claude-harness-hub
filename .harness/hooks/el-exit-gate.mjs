@@ -10,7 +10,7 @@ import { validateSliceLine } from '../scripts/lib/slice-parser.mjs';
 
 export const ATLAS_COORDS_REGEX = /\|\s*Coords:\s*\[([0-9,\s]+)\]/;
 
-export function validateProgressSlices(progressContent, atlasContent) {
+export function validateProgressSlices(progressContent, atlasContent, { openOnly = false } = {}) {
   const errors = [];
   const lines = progressContent.split('\n');
 
@@ -38,7 +38,9 @@ export function validateProgressSlices(progressContent, atlasContent) {
     return { valid: false, errors, slicesCount: 0 };
   }
 
-  for (const slice of slices) {
+  const checked = openOnly ? slices.filter((s) => !s.isCompleted) : slices;
+
+  for (const slice of checked) {
     const label = `Slice ${slice.sliceId}`;
 
     // 1. Target files:
@@ -87,7 +89,7 @@ export function validateProgressSlices(progressContent, atlasContent) {
   return {
     valid: errors.length === 0,
     errors,
-    slicesCount: slices.length
+    slicesCount: checked.length
   };
 }
 
@@ -101,7 +103,11 @@ if (isDirectRun) {
     } catch {}
   }
 
+  // Claude Code sends agent_type on SubagentStop; the gate only applies to el-architect.
+  if (event.stop_hook_active === true) process.exit(0);
+
   const agent = String(
+    event.agent_type ||
     event.agent ||
     event.subagent_type ||
     event.subagent ||
@@ -130,7 +136,8 @@ if (isDirectRun) {
   const atlasContent = fs.existsSync(atlasPath) ? fs.readFileSync(atlasPath, 'utf8') : '';
 
   const content = fs.readFileSync(progressPath, 'utf8');
-  const result = validateProgressSlices(content, atlasContent);
+  // Open slices only: completed slices are history and must not block the architect.
+  const result = validateProgressSlices(content, atlasContent, { openOnly: true });
 
   if (!result.valid) {
     console.error('EL EXIT GATE BLOCK: Validation failed for .spec/PROGRESS.md:');

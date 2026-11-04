@@ -1,10 +1,29 @@
 # System Specification & Contracts
 
 ## 1. Core Scope & MVP Boundaries
+
+### Scope Brief (triaged 2026-11-03: making the repo public)
+- **Core User Problem:** The owner needs to switch this repository from private to public without leaking private data, and needs a repo that a stranger can understand and run within minutes.
+- **MVP Deliverables:**
+  1. A public-readiness audit with a go/no-go list, plus sanitized files (no personal paths, no private repo names, no local-only settings).
+  2. A plain-English `README.md`, a `SECURITY.md`, and a recorded license decision.
+  3. A step-by-step visibility-switch guide for the owner, covering every GitHub setting the owner must change.
+- **Decisions (resolved 2026-11-03):** License is MIT. Old commit emails are accepted as-is, not rewritten.
+
+### Existing core scope
 - Provide deterministic hooks, model-routed subagents, and zero-cost Gemini audit handoffs.
 - **Gemini Bridge reference inlining:** in `spec` mode, `bundle-handoff.mjs` scans `.spec/SYSTEM_SPEC.md` (and `.spec/OVERVIEW.md`) for local Markdown links, resolves the ones that exist inside the repository, and inlines their contents under an `# APPENDED REFERENCES` section of `.spec/HANDOFF_PACKET.md`. Links outside the repo root, URLs, and missing files are skipped.
 
 ## 2. Strictly Out of Scope ("Do NOT Build" List)
+
+### Public-release do-not-build
+- No change to hook, script, or dashboard behavior in this release.
+- No git history rewrite or force push without the owner's explicit approval.
+- No visibility, branch protection, or secret changes made through the API. The owner changes visibility in GitHub's settings.
+- No authentication layer or hosted deployment for the dashboard.
+- No new features, slices, or dependency changes.
+
+### Existing boundaries
 - No paid external API calls inside hooks.
 - No external npm dependencies inside `.harness/`.
 - No symlinks outside the repository root.

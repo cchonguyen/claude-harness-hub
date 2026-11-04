@@ -53,6 +53,18 @@ test('manager mode with no active slice blocks source edits (PLAN LOCK)', () => 
   assert.match(r.stderr, /PLAN LOCK/);
 });
 
+test('a new active slice resets the coordinator edit budget (regression: slice name was never read)', () => {
+  const dir = makeRepo({
+    files: {
+      '.spec/harness.json': '{"workMode":"manager"}\n',
+      '.spec/PROGRESS.md': SLICE('src/app.js'),
+      'src/app.js': 'a\n',
+      '.spec/.session-telemetry.json': JSON.stringify({ sessionId: 's1', currentSlice: '3.2', coordinator_edits: 1 }),
+    },
+  });
+  assert.equal(runHook(GUARD, dir, edit(dir, 'src/app.js')).status, 0);
+});
+
 test('manager mode with the file in an active slice is allowed', () => {
   const dir = makeRepo({
     files: { '.spec/harness.json': '{"workMode":"manager"}\n', '.spec/PROGRESS.md': SLICE('src/app.js'), 'src/app.js': 'a\n' },

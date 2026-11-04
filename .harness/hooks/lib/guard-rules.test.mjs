@@ -70,7 +70,7 @@ test('protected path rule', () => {
 test('hub detection uses the origin URL only', () => {
   assert.equal(isHubOrigin('https://github.com/cchonguyen/claude-harness-hub.git'), true);
   assert.equal(isHubOrigin('git@github.com:cchonguyen/claude-harness-hub'), true);
-  assert.equal(isHubOrigin('https://github.com/cchonguyen/charliechonguyen.com'), false);
+  assert.equal(isHubOrigin('https://github.com/example-owner/example-site'), false);
   assert.equal(isHubOrigin(''), false);
 });
 
@@ -243,6 +243,8 @@ test('role resolution identifies subagents vs coordinator', () => {
   assert.equal(resolveRole({ subagent: 'librarian' }), 'librarian');
   assert.equal(resolveRole({ agent: 'git-clerk' }), 'git-clerk');
   assert.equal(resolveRole({}), 'coordinator');
+  assert.equal(resolveRole({ agent_type: 'el-architect' }), 'elephant');
+  assert.equal(resolveRole({ agent_type: 'gf-coder' }), 'goldfish');
 });
 
 // --- Slice 4.3 Tests: el-architect Exit Gate ---
@@ -302,3 +304,10 @@ test('el exit gate blocks slices citing invalid Coords when Context Atlas conten
   assert.ok(result.errors.some((e) => e.includes('Coordinate 999 does not exist in Context Atlas')));
 });
 
+
+test('el exit gate open-only mode ignores completed slices', () => {
+  const doneBad = '- [x] **Slice 9.9: Old** Target files: `a.mjs` | Coords: [1] | Verify: `npm test`\n- [ ] **Slice 9.10: Open** Target files: `b.mjs` | Coords: [1] | Verify: `npm test`\n';
+  const atlas = '| Coords: [1] |';
+  assert.equal(validateProgressSlices(doneBad, atlas, { openOnly: true }).valid, validateProgressSlices(doneBad.split('\n')[1] + '\n', atlas).valid);
+  assert.equal(validateProgressSlices(doneBad, atlas, { openOnly: true }).slicesCount, 1);
+});

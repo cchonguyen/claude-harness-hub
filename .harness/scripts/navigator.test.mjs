@@ -157,6 +157,28 @@ test('checkAtlasReferences detects broken links in ATLAS.md', () => {
   }
 });
 
+test('checkAtlasReferences flags a .spec/ file that has no coordinate in ATLAS.md', () => {
+  const dir = makeTempSpecRepo();
+  try {
+    fs.writeFileSync(path.join(dir, '.spec', 'NEW_NOTES.md'), '# Notes\n');
+    const { unindexedSpecFiles } = checkAtlasReferences(dir);
+    assert.equal(unindexedSpecFiles.length, 1);
+    assert.equal(unindexedSpecFiles[0].file, '.spec/NEW_NOTES.md');
+
+    const result = navigatorCheck(dir);
+    assert.equal(result.ok, false);
+    assert.ok(result.errors.some((e) => e.includes('Unindexed spec file: .spec/NEW_NOTES.md')));
+
+    fs.appendFileSync(
+      path.join(dir, '.spec', 'ATLAS.md'),
+      '- `950` [.spec/NEW_NOTES.md](.spec/NEW_NOTES.md) — Notes\n'
+    );
+    assert.equal(checkAtlasReferences(dir).unindexedSpecFiles.length, 0);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('checkLineBudgets detects files exceeding soft caps', () => {
   const dir = makeTempSpecRepo();
   try {

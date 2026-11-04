@@ -118,6 +118,15 @@ export function checkAtlasReferences(root) {
   const index = parseAtlasIndex(targetPath);
   const brokenRefs = [];
   const brokenLinks = [];
+  const unindexedSpecFiles = [];
+
+  // Every .spec/ file (except the index itself) must be a target in ATLAS.md
+  const indexedTargets = new Set(
+    [...index.entries.values()]
+      .map((e) => e.target.replace(/^file:\/\/[^/]*\//, '').replace(/^\.\//, ''))
+      .filter(Boolean)
+      .map((t) => path.posix.normalize(t))
+  );
 
   // Known valid codes in index (entries + section headings)
   const validCodes = new Set([...index.entries.keys(), ...index.sections]);
@@ -149,7 +158,10 @@ export function checkAtlasReferences(root) {
         if (f.isDirectory()) {
           walk(full);
         } else if (f.isFile() && f.name.endsWith('.md')) {
-          const rel = path.relative(root, full);
+          const rel = path.relative(root, full).split(path.sep).join('/');
+          if (rel !== '.spec/ATLAS.md' && !indexedTargets.has(rel)) {
+            unindexedSpecFiles.push({ file: rel, reason: `${rel} has no coordinate in .spec/ATLAS.md` });
+          }
           const content = fs.readFileSync(full, 'utf8');
           const refs = extractAtlasCoords(content);
           for (const code of refs) {
@@ -167,7 +179,7 @@ export function checkAtlasReferences(root) {
     walk(specDir);
   }
 
-  return { brokenRefs, brokenLinks };
+  return { brokenRefs, brokenLinks, unindexedSpecFiles };
 }
 
 // Backward compatibility alias
@@ -240,12 +252,13 @@ export function archiveCompletedSlices(root) {
 export function navigatorCheck(root) {
   const thresholds = loadThresholds(root);
   const budgetViolations = thresholds ? checkLineBudgets(root, thresholds) : [];
-  const { brokenRefs, brokenLinks } = checkAtlasReferences(root);
+  const { brokenRefs, brokenLinks, unindexedSpecFiles } = checkAtlasReferences(root);
 
   const errors = [
     ...budgetViolations.map((v) => `Line budget violation: ${v.reason}`),
     ...brokenRefs.map((r) => `Broken Atlas coordinate reference: ${r.reason} (${r.file})`),
     ...brokenLinks.map((l) => `Broken ATLAS link: ${l.reason} (code ${l.code})`),
+    ...unindexedSpecFiles.map((u) => `Unindexed spec file: ${u.reason}`),
   ];
 
   return {
@@ -254,6 +267,7 @@ export function navigatorCheck(root) {
     budgetViolations,
     brokenRefs,
     brokenLinks,
+    unindexedSpecFiles,
   };
 }
 

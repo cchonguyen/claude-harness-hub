@@ -33,6 +33,7 @@ export const activeTargets = (line) => {
 
 export function resolveRole(event = {}) {
   const agentField = String(
+    event.agent_type ||
     event.agent ||
     event.subagent ||
     event.agent_name ||
@@ -400,7 +401,7 @@ if (isDirectRun) {
   if (fs.existsSync(progressPath)) {
     try {
       const lines = fs.readFileSync(progressPath, 'utf8').split('\n');
-      const active = lines.find((l) => ACTIVE_TASK.test(line));
+      const active = lines.find((l) => ACTIVE_TASK.test(l));
       activeSliceName = active?.match(/\*\*Slice\s+([^*]+)\*\*/)?.[1]?.trim() || '';
     } catch {}
   }

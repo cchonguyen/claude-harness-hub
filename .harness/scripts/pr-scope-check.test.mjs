@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { analyze, formatJsonVerdict, parseDiff, parseNameStatus, isCommentLine, ASSERTION, SKIP_MARK, isPackageJsonVersionOnly } from './pr-scope-check.mjs';
+import { analyze, formatJsonVerdict, parseDiff, parseNameStatus, isCommentLine, ASSERTION, SKIP_MARK, isPackageJsonVersionOnly, isAdditiveSupabaseMigration } from './pr-scope-check.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const SCRIPT = path.join(here, 'pr-scope-check.mjs');
@@ -484,6 +484,42 @@ test('SKIP_MARK matches modern framework skip patterns when uncommented', () => 
   for (const line of skipPatterns) {
     assert.ok(SKIP_MARK.test(line), `Expected SKIP_MARK to match: ${line}`);
   }
+});
+
+test('an additive Supabase migration does not trip the migrations wire; other migration edits still do', () => {
+  const added = testDiff('supabase/migrations/0034_edition_fact_sources.sql', ['alter table event_editions add column if not exists fact_source_note text;']);
+  const r = analyze({ changed: ['supabase/migrations/0034_edition_fact_sources.sql'], diff: added, progress: '' });
+  assert.equal(r.tripwireFired, false);
+  assert.equal(isAdditiveSupabaseMigration('supabase/migrations/0034_edition_fact_sources.sql', added), true);
+
+  const rewritten = testDiff('supabase/migrations/0030_performance_set.sql', ['select 1;'], ['select 0;']);
+  const r2 = analyze({ changed: ['supabase/migrations/0030_performance_set.sql'], diff: rewritten, progress: '' });
+  assert.equal(r2.tripwireFired, true);
+
+  const other = testDiff('db/migrations/001.sql', ['select 1;']);
+  assert.equal(isAdditiveSupabaseMigration('db/migrations/001.sql', other), false);
+});
+
+test('strict: the four sync-delivered gate files raise no tripwire or engine problem', () => {
+  const changed = [
+    '.github/workflows/harness-slice-gate.yml',
+    '.github/workflows/harness-referee-watch.yml',
+    '.harness/scripts/ci-gate.mjs',
+    '.harness/scripts/ci-gate.test.mjs',
+  ];
+  const r = analyze({ changed, strict: true, hubSync: false });
+  assert.deepEqual(r.problems, []);
+  assert.ok(r.notes.some((n) => n.includes('.harness/scripts/ci-gate.mjs') && n.includes('not verified against the hub')));
+});
+
+test('strict: other workflow files still trip the CI workflow tripwire', () => {
+  const r = analyze({ changed: ['.github/workflows/ci.yml'], strict: true, hubSync: false });
+  assert.ok(r.problems.some((p) => p.includes('Red tripwire (CI workflow): .github/workflows/ci.yml')));
+});
+
+test('strict: other engine files still count as spoke changes to the hub-owned engine', () => {
+  const r = analyze({ changed: ['.harness/scripts/pr-scope-check.mjs'], strict: true, hubSync: false });
+  assert.ok(r.problems.some((p) => p.includes('Spoke changed an engine file') && p.includes('pr-scope-check.mjs')));
 });
 
 test('a stale [IN_PROGRESS] placeholder with no changed targets does not block a done slice in the PR', () => {
