@@ -66,6 +66,17 @@ Then open <http://127.0.0.1:3000> in your browser. The dashboard only listens on
 
 Some notes mention Google Antigravity, Google AI Studio, or Gemini. Those are other AI tools the harness can hand a task to. They are optional, and the core harness does not depend on them.
 
+## Project threads (Claude Code web)
+
+Project threads ignore a repo's `.claude/settings.json` and `.claude/agents/`, and plugins from your own marketplace in **Project settings > Plugins** do not reach them. The working route is the cloud environment's setup script, which installs `plugins/harness` into `~/.claude/skills/harness`. Claude Code loads it there as a plugin, so every thread gets `harness:el-architect`, the `harness:gf-*` agents and the harness hooks. The hooks forward to each repo's own `.harness/hooks/` and do nothing in repos without it.
+
+To turn it on for a project:
+1. Open **Project settings > Environment**, open the **Cloud environment** menu, and click the gear next to the selected environment.
+2. Select **Setup script**, paste the contents of `plugins/harness/setup-script.sh`, and click **Save changes**.
+3. Start a new thread and ask whether `harness:gf-coder` is in its agent list.
+
+The environment caches setup for about seven days. A plugin change on `main` reaches threads after you edit the script or the cache rebuilds.
+
 ## Architecture: Elephant, Falcon, Goldfish
 
 The harness splits work across three tiers of agents. They differ in how much context each one carries and how long it lives. Routine bookkeeping goes to Node.js scripts, which cost no model tokens.
