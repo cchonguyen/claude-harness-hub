@@ -20,6 +20,15 @@ export const SKIP_MARK = /^\s*(?:(?:it|test|describe)\.(?:skip|only)\(|(?:xit|xd
 const MANIFEST = /(^|\/)(package\.json|package-lock\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lockb?|requirements[^/]*\.txt|pyproject\.toml|uv\.lock|go\.(mod|sum)|Cargo\.(toml|lock))$/;
 // Spoke-owned engine-adjacent files that a spoke may change even though they sit in an engine folder
 const SPOKE_OWNED = new Set(['.claude/project-rules.md', '.claude/settings.spoke.json']);
+// Harness files a spoke receives from the hub: the slice gate workflows (copied from templates) and the gate script.
+// A spoke PR that carries exactly these paths is not a tripwire. Their content is not checked against the hub here,
+// so the PR check cannot prove they match the hub; the Referee watch on main is the backstop for that.
+export const SYNC_DELIVERED = new Set([
+  '.github/workflows/harness-slice-gate.yml',
+  '.github/workflows/harness-referee-watch.yml',
+  '.harness/scripts/ci-gate.mjs',
+  '.harness/scripts/ci-gate.test.mjs',
+]);
 
 export function isPackageJsonVersionOnly(fileDiff) {
   if (!fileDiff) return false;
@@ -59,12 +68,13 @@ export const TRIPWIRES = [
   { name: 'auth file', test: (f) => /(^|[/._-])auth([/._-]|$)/i.test(f) },
   { name: 'env file', test: (f) => /(^|\/)\.env[^/]*$/.test(f) },
   { name: 'AGENTS.md', test: (f) => f === 'AGENTS.md' },
-  { name: 'CI workflow', test: (f) => f.startsWith('.github/workflows/') },
+  { name: 'CI workflow', test: (f) => f.startsWith('.github/workflows/') && !SYNC_DELIVERED.has(f) },
 ];
 
 export const isTestFile = (file) => TEST_FILE.test(file);
 export const isEngineFile = (file) =>
-  !SPOKE_OWNED.has(file) && (file.startsWith('.claude/') || file.startsWith('.harness/') || file === '.harness-version');
+  !SPOKE_OWNED.has(file) && !SYNC_DELIVERED.has(file)
+  && (file.startsWith('.claude/') || file.startsWith('.harness/') || file === '.harness-version');
 
 // A hub sync is the only legitimate way for a spoke to change engine files. It rewrites each synced file and
 // records its sha256 in .harness/managed.json. True only when every engine file changed matches its recorded hash,
@@ -182,6 +192,10 @@ export function analyze({
       if (strict) problems.push(`Spoke changed an engine file, which the hub owns: ${file}`);
       else notes.push(`Engine file changed: ${file}. Confirm this is intended.`);
     }
+  }
+
+  for (const file of touched) {
+    if (SYNC_DELIVERED.has(file)) notes.push(`Sync-delivered harness file: ${file}. Allowed by the scope check; its content is not verified against the hub.`);
   }
 
   // Scope rule: while exactly one slice is [IN_PROGRESS], only its Target files (and .spec/) may change.
