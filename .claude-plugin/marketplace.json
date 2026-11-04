@@ -1,7 +1,14 @@
 {
   "name": "harness-hub",
-  "owner": { "name": "cchonguyen" },
+  "owner": {
+    "name": "cchonguyen"
+  },
   "plugins": [
+    {
+      "name": "harness",
+      "source": "./plugins/harness",
+      "description": "Elephant and Goldfish subagents plus harness hooks for Claude project threads. Hooks forward to each repo's own .harness/hooks/ and skip repos without it."
+    },
     {
       "name": "harness-probe",
       "source": "./plugins/harness-probe",
