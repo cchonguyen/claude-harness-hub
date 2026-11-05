@@ -53,3 +53,14 @@ Slice colour tags: `[UI / VISUAL]` needs typecheck only. `[CORE / DATA]` needs t
 
 ## When blocked
 Finish everything that does not depend on the blocker first. Then end your reply with a `Needed from you:` block of numbered, concrete steps. Put nothing after it.
+
+## Dashboard and slice tracking (required)
+Whenever executing work in any repository:
+1. When starting a new feature slice or milestone:
+   - Run `node ~/Projects/harness-hub/claude-harness-hub/bin/update-state.mjs --slice-id <id> --slice-title '<title>' --intent '<goal>' --stage Implementation`
+2. If you hit an architectural blocker or need a human decision:
+   - Run `node ~/Projects/harness-hub/claude-harness-hub/bin/update-state.mjs --add-decision '<id>:<question>:<contextFile>'`
+3. When coding is complete:
+   - Set stage to Claimed: `node ~/Projects/harness-hub/claude-harness-hub/bin/update-state.mjs --stage Claimed`
+   - Run verification immediately: `~/Projects/harness-hub/claude-harness-hub/bin/verify-slice.sh`
+   - Ask the user to review and click "Accept Verified Slice" on the dashboard at http://127.0.0.1:3456/.

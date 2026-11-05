@@ -242,6 +242,9 @@ async function buildSnapshot() {
       worktreeId: path.basename(wt.path),
       branch: state?.branch || null,
       currentIntent: state?.currentIntent || null,
+      activeSlice: state?.activeSlice?.id
+        ? { id: String(state.activeSlice.id), title: String(state.activeSlice.title || '') }
+        : null,
       stage,
       rawStage: state?.stage || null,
       badge,

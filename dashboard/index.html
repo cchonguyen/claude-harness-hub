@@ -83,6 +83,7 @@
     top.appendChild(el("span", "badge", c.rawStage || "unknown"));
     box.appendChild(top);
     box.appendChild(el("div", "title", c.currentIntent || c.worktreeId));
+    if (c.activeSlice) box.appendChild(el("div", "muted", "slice " + c.activeSlice.id + (c.activeSlice.title ? ": " + c.activeSlice.title : "")));
     box.appendChild(el("div", "muted", "branch: " + (c.branch || "?") + " · HEAD " + (c.currentHeadSha || "?")));
     var flags = el("div", "row");
     flags.appendChild(el("span", "herdr-" + c.herdr, "Herdr: " + c.herdr));
