@@ -40,8 +40,9 @@ function probeFastPathBudget() {
 }
 
 function probeGfCoder(root) {
-  // The plugin is installed from the hub's main branch, not synced into spokes, so spokes skip this probe.
-  if (isSpokeRoot(root)) {
+  // The plugin is installed from the hub's main branch, not synced into spokes, so spokes without
+  // a plugins/harness folder skip this probe. A spoke that does carry one must still have gf-coder.
+  if (isSpokeRoot(root) && !fs.existsSync(path.join(root, 'plugins', 'harness'))) {
     return check('gf-coder-registered', 'skip', true, 'spoke: harness plugin is installed from the hub, not synced');
   }
   const ok = fs.existsSync(path.join(root, 'plugins', 'harness', 'agents', 'gf-coder.md'));
