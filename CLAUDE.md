@@ -8,6 +8,7 @@ These rules load into every thread. Repo `.claude/` hooks, agents and commands n
 - Requirements unclear, `Target files:` unknown, or `.spec/BLACK_BOX.md` exists: dispatch `harness:el-architect`.
 - Exploring unfamiliar code: dispatch `harness:gf-navigator`.
 - The plugin's hooks enforce a fast-path budget in the main thread: 3 source reads, 1 search, 1 edit of at most 25 lines. A `FAST-PATH BUDGET EXCEEDED` block means delegate. Never work around it with Bash.
+- Multi-file edits in the main thread: dispatch `harness:gf-coder` from the start. Do not make a second source edit and wait for the fast-path block.
 
 ## Working style
 - Reply with the result first. Use short sentences and no filler.
