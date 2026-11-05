@@ -107,6 +107,14 @@ function filterIgnoredFiles(cwd, fileList) {
   }
 }
 
+// One-time bootstrap exception: slice 10.2 builds the telemetry hook, so it cannot have dispatch records yet.
+// Only that slice, only with a stated reason. Every other slice still needs a recorded subagent dispatch.
+export function bootstrapException(sliceId, reason) {
+  const text = typeof reason === 'string' ? reason.trim() : '';
+  if (sliceId !== '10.2' || !text) return { allowed: false, reason: '' };
+  return { allowed: true, reason: text };
+}
+
 export function finishSlice(root, commitMsg, options = {}) {
   const verify = options.verify || autoVerify;
   ensureHarnessRoot();
@@ -212,7 +220,8 @@ export function finishSlice(root, commitMsg, options = {}) {
   // Runs before any write, so a refusal leaves PROGRESS.md and the tree untouched.
   const sliceCalls = readCalls(root);
   const dispatchCount = dispatchesFor(sliceCalls, sliceId).length;
-  if (dispatchCount === 0) {
+  const bootstrap = bootstrapException(sliceId, options.bootstrap);
+  if (dispatchCount === 0 && !bootstrap.allowed) {
     throw new Error(`Telemetry gate failed: no subagent dispatch recorded for slice ${sliceId}.`);
   }
   const mainWrites = mainSourceWrites(sliceCalls, sliceId);
@@ -315,6 +324,9 @@ export function finishSlice(root, commitMsg, options = {}) {
       '--trailer', `Telemetry-Dispatches: ${dispatchCount}`,
       '--trailer', 'Telemetry-Main-Source-Writes: 0'
     ];
+    if (bootstrap.allowed && dispatchCount === 0) {
+      trailers.push('--trailer', `Bootstrap-Exception: ${bootstrap.reason}`);
+    }
     if (engineHash) {
       trailers.push('--trailer', `Referee-Engine: ${engineHash}`);
     }
@@ -352,13 +364,20 @@ export function finishSlice(root, commitMsg, options = {}) {
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   ensureHarnessRoot();
   const root = resolveRoot();
-  const commitMsg = process.argv.slice(2).join(' ').trim();
+  const args = process.argv.slice(2);
+  let bootstrapReason;
+  const bi = args.indexOf('--bootstrap');
+  if (bi !== -1) {
+    bootstrapReason = args[bi + 1];
+    args.splice(bi, 2);
+  }
+  const commitMsg = args.join(' ').trim();
   if (!commitMsg) {
-    console.error('Usage: node .harness/scripts/finish-slice.mjs "<commit message>"');
+    console.error('Usage: node .harness/scripts/finish-slice.mjs [--bootstrap "<reason>"] "<commit message>"');
     process.exit(1);
   }
   try {
-    const res = finishSlice(root, commitMsg);
+    const res = finishSlice(root, commitMsg, { bootstrap: bootstrapReason });
     console.log(`✓ FINISH SLICE: ${res.sliceId} committed (${res.commitSha}). Referee-Verdict: VERIFIED.`);
     if (res.verification && res.verification.ran) {
       if (res.verification.passed) {
