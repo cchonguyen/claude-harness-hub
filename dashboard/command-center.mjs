@@ -19,6 +19,7 @@ import os from 'node:os';
 import crypto from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { parseInProgress } from './lib/progress.mjs';
 
 const execFileP = promisify(execFile);
 
@@ -161,6 +162,16 @@ function readSpecJson(worktreePath, relFile) {
   }
 }
 
+/** In-progress slices listed only in .spec/PROGRESS.md. Returns [] on any error. */
+function readProgressSlices(worktreePath) {
+  try {
+    const file = resolveSpecFile(worktreePath, 'PROGRESS.md');
+    return parseInProgress(fs.readFileSync(file, 'utf8'));
+  } catch {
+    return [];
+  }
+}
+
 function fileMtime(p) {
   try {
     return fs.statSync(p).mtime.toISOString();
@@ -230,11 +241,26 @@ async function buildSnapshot() {
     const worktreeStage = state?.stage && STAGES.includes(state.stage) ? state.stage : 'Design';
 
     // One card per active slice; a worktree with no slices gets one card for its worktree-level stage.
-    const slices = Array.isArray(state?.activeSlices) && state.activeSlices.length
+    const stateSlices = Array.isArray(state?.activeSlices) && state.activeSlices.length
       ? state.activeSlices.map((s) => ({ id: String(s.id), title: String(s.title || ''), stage: s.stage || null }))
-      : [null];
+      : [];
+
+    // Slices seen only in .spec/PROGRESS.md: stage Implementation, no verification, never acceptable.
+    const knownIds = new Set(stateSlices.map((s) => s.id));
+    const progressOnlyIds = new Set();
+    const progressOnly = [];
+    for (const p of readProgressSlices(wt.path)) {
+      if (knownIds.has(p.id)) continue;
+      knownIds.add(p.id);
+      progressOnlyIds.add(p.id);
+      progressOnly.push({ id: p.id, title: p.title, stage: 'Implementation' });
+    }
+
+    const slices = [...stateSlices, ...progressOnly];
+    if (!slices.length) slices.push(null);
 
     for (const sl of slices) {
+      const isProgressOnly = sl ? progressOnlyIds.has(sl.id) : false;
       const baseStage = sl?.stage && STAGES.includes(sl.stage) ? sl.stage : worktreeStage;
       let stage = baseStage;
       let badge = null;
@@ -259,9 +285,9 @@ async function buildSnapshot() {
         staleLabel: stale ? 'STALE (>30m)' : null,
         updatedAt: state?.updatedAt || null,
         pendingDecisions: Array.isArray(state?.pendingDecisions) ? state.pendingDecisions.length : 0,
-        verification: ver ? { testsPassing: ver.testsPassing, evidenceCommitSha: ver.evidenceCommitSha } : null,
+        verification: !isProgressOnly && ver ? { testsPassing: ver.testsPassing, evidenceCommitSha: ver.evidenceCommitSha } : null,
         currentHeadSha,
-        canAccept,
+        canAccept: isProgressOnly ? false : canAccept,
         herdr: herdr.state,
         herdrAgentId: herdr.agentId,
         handoffUpdatedAt: fileMtime(path.join(wt.path, '.spec', 'HANDOFF_PACKET.md')),
