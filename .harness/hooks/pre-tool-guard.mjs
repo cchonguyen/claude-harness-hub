@@ -13,6 +13,7 @@ import { clearUpshiftAuth, verifyUpshiftAuth } from '../scripts/evaluate-upshift
 import { normalizePayload } from './adapter.mjs';
 import { currentHead, ensureDoctorState } from '../scripts/doctor.mjs';
 import { gateDecision } from './lib/doctor-state.mjs';
+import { mainThreadDecision } from './lib/main-thread-guard.mjs';
 
 const gitIn = (cwd, args, env = {}) =>
   execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'], env: { ...process.env, ...env } }).trim();
@@ -370,6 +371,13 @@ if (isDirectRun) {
   });
   if (!gate.allowed) {
     console.error(gate.reason);
+    process.exit(2);
+  }
+
+  // Main-thread allow-list: subagents (agent_type set) are not restricted here
+  const mainThread = mainThreadDecision({ agentType: event.agent_type, toolName: event.tool_name, toolInput: event.tool_input, root });
+  if (!mainThread.allowed) {
+    console.error(mainThread.reason);
     process.exit(2);
   }
 
