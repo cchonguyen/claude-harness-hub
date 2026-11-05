@@ -30,3 +30,4 @@ The single entry point and registry for harness-hub specification artifacts. Def
 - `410` [.spec/DECISIONS.md](DECISIONS.md) — Architecture Decision Records (ADRs)
 - `420` [.spec/OVERVIEW.md](OVERVIEW.md) — Project overview & test status
 - `430` [.spec/AI_STUDIO_RULES.md](AI_STUDIO_RULES.md) — AI Studio rules template
+- `440` [.spec/plans/README.md](plans/README.md) — Plan-merge approval format

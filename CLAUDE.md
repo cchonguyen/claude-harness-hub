@@ -46,6 +46,7 @@ Slice colour tags: `[UI / VISUAL]` needs typecheck only. `[CORE / DATA]` needs t
 - Put the typecheck, lint and test results in the pull request description.
 - The `Harness slice gate` check must pass. It needs a slice line in `.spec/PROGRESS.md` and a head commit with Referee trailers. A quick fix or a vibe-mode change will show red, by design.
 - Use the pull request template if the repo has one.
+- A plan file in `.spec/plans/` is the operator's approval for the slices it lists. Merging it accepts them (see `.spec/plans/README.md`). No per-slice accept step is needed.
 
 ## Web-first operation
 - Run scripts, tests and git yourself in the cloud container. Do not ask the operator to run them.
