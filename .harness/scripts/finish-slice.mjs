@@ -107,11 +107,14 @@ function filterIgnoredFiles(cwd, fileList) {
   }
 }
 
-// One-time bootstrap exception: slice 10.2 builds the telemetry hook, so it cannot have dispatch records yet.
-// Only that slice, only with a stated reason. Every other slice still needs a recorded subagent dispatch.
+// One-time bootstrap exceptions, each for a named slice only, with a stated reason.
+// 10.2 builds the telemetry hook, so it cannot have dispatch records yet.
+// 5.1 was merged without a stamp because dispatch telemetry was not recorded in its cloud session.
+// Every other slice still needs a recorded subagent dispatch.
+const BOOTSTRAP_SLICES = new Set(['10.2', '5.1']);
 export function bootstrapException(sliceId, reason) {
   const text = typeof reason === 'string' ? reason.trim() : '';
-  if (sliceId !== '10.2' || !text) return { allowed: false, reason: '' };
+  if (!BOOTSTRAP_SLICES.has(sliceId) || !text) return { allowed: false, reason: '' };
   return { allowed: true, reason: text };
 }
 
