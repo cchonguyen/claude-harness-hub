@@ -39,7 +39,25 @@ jobs:
 
       - name: Wait for checks
         if: steps.state.outputs.state == 'OPEN'
-        run: gh pr checks "$PR" --repo "$REPO" --watch --fail-fast --interval 20
+        # Skip this job's own check run. `gh pr checks --watch` would wait on it
+        # while it is still running, which never ends.
+        run: |
+          for attempt in $(seq 1 90); do
+            checks=$(gh pr checks "$PR" --repo "$REPO" --json name,bucket 2>/dev/null || echo '[]')
+            others=$(echo "$checks" | jq '[.[] | select(.name != "automerge" and (.name | endswith(" / automerge") | not))]')
+            if [ "$(echo "$others" | jq '[.[] | select(.bucket == "fail" or .bucket == "cancel")] | length')" -gt 0 ]; then
+              echo "A check failed; not merging."
+              echo "$others" | jq -r '.[] | select(.bucket == "fail" or .bucket == "cancel") | .name'
+              exit 1
+            fi
+            if [ "$(echo "$others" | jq '[.[] | select(.bucket == "pending")] | length')" -eq 0 ] && [ "$(echo "$others" | jq 'length')" -gt 0 ]; then
+              echo "All other checks passed."
+              exit 0
+            fi
+            sleep 20
+          done
+          echo "Timed out waiting for checks."
+          exit 1
 
       - name: Merge PR
         if: steps.state.outputs.state == 'OPEN'
