@@ -31,3 +31,23 @@ test('two lines return two entries in order', () => {
 test('empty text returns []', () => {
   assert.deepEqual(parseInProgress(''), []);
 });
+
+test('an [x] line with Awaiting-accept is returned', () => {
+  const text = '- [x] **Slice 8.6: Waiting Thing** [CORE / DATA] Awaiting-accept\n';
+  assert.deepEqual(parseInProgress(text), [{ id: '8.6', title: 'Waiting Thing' }]);
+});
+
+test('an [x] line with no marker is ignored', () => {
+  const text = '- [x] **Slice 8.7: Plain Done** [CORE / DATA]\n';
+  assert.deepEqual(parseInProgress(text), []);
+});
+
+test('a line with Awaiting-accept and Accepted-by-plan is ignored', () => {
+  const text = '- [x] **Slice 8.8: Accepted Thing** [CORE / DATA] Awaiting-accept Accepted-by-plan\n';
+  assert.deepEqual(parseInProgress(text), []);
+});
+
+test('an [IN_PROGRESS] line is still returned', () => {
+  const text = '- [ ] **Slice 8.9: Active Thing** [IN_PROGRESS] [UI / VISUAL]\n';
+  assert.deepEqual(parseInProgress(text), [{ id: '8.9', title: 'Active Thing' }]);
+});
