@@ -20,6 +20,9 @@ if [[ -z "$INTERNAL_SECRET" ]]; then
   exit 1
 fi
 
+# Running the gate is the claim that the slice is done, so move to Claimed first. Claimed needs no key.
+node "$UPDATE_SCRIPT" --stage Claimed >/dev/null
+
 echo "================================================================================"
 echo " [VERIFICATION GATE] Running Deterministic Slice Verification"
 echo "================================================================================"
