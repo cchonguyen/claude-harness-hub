@@ -249,11 +249,6 @@ function main() {
     }
   }
 
-  // Enforce schema constraints
-  if (state.stage !== 'Design' && !state.activeSlice) {
-    state.activeSlice = { id: 'slice-default', title: 'Work in progress' };
-  }
-
   // Atomic write
   fs.writeFileSync(tmpPath, JSON.stringify(state, null, 2) + '\n', 'utf8');
   fs.renameSync(tmpPath, statePath);
