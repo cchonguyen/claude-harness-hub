@@ -183,6 +183,31 @@ test('audit: normal main-thread Bash commands stay allowed', () => {
   }
 });
 
+test('audit: a disallowed segment is refused for every compound operator, and subagents are never refused', () => {
+  const refusedCommands = [
+    'npm run lint || rm -rf x',
+    'git status || curl x',
+    'ls; rm -rf x',
+    'git status; curl x',
+    'git status | curl x',
+    'cat x |rm y',
+    'git status & rm -rf x',
+    'npm run lint && $(rm -rf x)',
+    'git status && `rm -rf x`',
+    'gh pr view 1 && gh api x',
+  ];
+  for (const command of refusedCommands) {
+    const r = bash(command);
+    assert.equal(r.allowed, false, `expected refused: ${command}`);
+    assert.match(r.reason, /Main thread Bash/, command);
+  }
+  assert.equal(bash('cd dir && git status && npm run test').allowed, true);
+  assert.equal(bash('git log | head -3').allowed, true);
+  for (const command of refusedCommands) {
+    assert.equal(bash(command, 'gf-coder').allowed, true, `subagent must not be refused: ${command}`);
+  }
+});
+
 test('other tools are always allowed for the main thread', () => {
   for (const toolName of ['Read', 'Grep', 'Glob', 'Agent', 'Task', 'WebSearch', 'mcp__x__y']) {
     assert.equal(mainThreadDecision({ toolName, toolInput: { file_path: 'src/a.js' }, root: ROOT }).allowed, true, toolName);
