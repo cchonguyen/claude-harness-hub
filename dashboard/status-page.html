@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Harness status</title>
+<style>
+:root {
+  --bg: #f6f7f9;
+  --fg: #1d2228;
+  --muted: #5b6470;
+  --card: #ffffff;
+  --border: #d8dde3;
+  --accent: #2456a6;
+  --ok: #1c7a3c;
+  --bad: #b3261e;
+  --warn: #8a5a00;
+  --banner-bg: #fde8e7;
+  --banner-fg: #7a1410;
+  --strip-bg: #fff4d6;
+  --strip-fg: #5c3d00;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f1216;
+    --fg: #e6e9ee;
+    --muted: #9aa4b1;
+    --card: #181d24;
+    --border: #2c3440;
+    --accent: #8ab4ff;
+    --ok: #6fd08c;
+    --bad: #ff8a80;
+    --warn: #f0c060;
+    --banner-bg: #3a1614;
+    --banner-fg: #ffd7d3;
+    --strip-bg: #332a12;
+    --strip-fg: #f5e3b0;
+  }
+}
+* { box-sizing: border-box; }
+html, body { background: var(--bg); }
+body {
+  margin: 0;
+  color: var(--fg);
+  font: 16px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+main { padding: 16px; max-width: 760px; margin: 0 auto; }
+h1 { font-size: 1.4rem; margin: 0 0 4px; }
+h2 { font-size: 1.1rem; margin: 24px 0 8px; }
+h3 { font-size: 1rem; margin: 0 0 4px; }
+a { color: var(--accent); }
+.muted { color: var(--muted); font-size: 0.9rem; }
+.banner, .strip {
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin: 12px 0;
+}
+.banner { background: var(--banner-bg); color: var(--banner-fg); }
+.strip { background: var(--strip-bg); color: var(--strip-fg); }
+.hidden { display: none; }
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin: 8px 0;
+}
+.line { margin: 2px 0; font-size: 0.92rem; }
+.checks { margin: 6px 0 0; padding: 0; list-style: none; font-size: 0.9rem; }
+.checks li { display: inline-block; margin: 2px 10px 2px 0; }
+.ok { color: var(--ok); }
+.bad { color: var(--bad); }
+.warn { color: var(--warn); }
+.foot {
+  color: var(--muted);
+  font-size: 0.8rem;
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+.empty { color: var(--muted); font-size: 0.92rem; margin: 6px 0; }
+.strip ul { margin: 6px 0 0; padding-left: 20px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Harness status</h1>
+  <p class="muted" id="top-line">Loading snapshot...</p>
+
+  <div class="banner hidden" id="blind" role="alert">
+    <strong>The status page cannot see GitHub right now. The data below is old.</strong>
+    <div class="muted" id="blind-detail"></div>
+  </div>
+
+  <section class="strip" id="contra-strip">
+    <strong id="contra-count">Checking for contradictions...</strong>
+    <ul id="contra-list"></ul>
+    <div class="muted" id="contra-note">
+      Simple client-side check: three rules that mirror dashboard/lib/contradictions.mjs. It is not the full detector.
+    </div>
+  </section>
+
+  <h2>Slices</h2>
+  <div id="slices"></div>
+
+  <h2>Pushed, not on main</h2>
+  <div id="pushed"></div>
+</main>
+
+<script>
+(function () {
+  'use strict';
+
+  var STALE_MS = 5 * 60 * 1000;
+  var RELOAD_MS = 60 * 1000;
+  var RERENDER_MS = 15 * 1000;
+  var STALE_PUSH_MS = 2 * 60 * 60 * 1000;
+
+  var snapshot = null;   // last good status.json (kept when a reload fails)
+  var loadError = null;  // error text from the most recent failed reload
+
+  function byId(id) { return document.getElementById(id); }
+  function isObj(v) { return v !== null && typeof v === 'object'; }
+
+  function el(tag, cls, text) {
+    var node = document.createElement(tag);
+    if (cls) node.className = cls;
+    if (text !== undefined && text !== null) node.textContent = String(text);
+    return node;
+  }
+
+  // Only https links are rendered, so snapshot data cannot inject a javascript: URL.
+  function safeUrl(u) {
+    return typeof u === 'string' && /^https:\/\//.test(u) ? u : null;
+  }
+
+  function fetchedMs() {
+    if (!snapshot || typeof snapshot.fetchedAt !== 'string') return NaN;
+    return Date.parse(snapshot.fetchedAt);
+  }
+
+  // Returns e.g. "40s", "7m", "2h", or null when the time cannot be read.
+  function ageOf(ms, now) {
+    if (!isFinite(ms)) return null;
+    var secs = Math.floor(Math.max(0, now - ms) / 1000);
+    if (secs < 60) return secs + 's';
+    var mins = Math.floor(secs / 60);
+    if (mins < 60) return mins + 'm';
+    return Math.floor(mins / 60) + 'h';
+  }
+
+  function isStale(now) {
+    var ms = fetchedMs();
+    return !snapshot || snapshot.ok !== true || loadError !== null ||
+      !isFinite(ms) || now - ms > STALE_MS;
+  }
+
+  function sha7() {
+    var sha = snapshot && isObj(snapshot.source) ? snapshot.source.progressSha : null;
+    return typeof sha === 'string' && sha.length > 0 ? sha.slice(0, 7) : 'unknown';
+  }
+
+  function footerText(now) {
+    var age = ageOf(fetchedMs(), now);
+    var fetched = age === null ? 'fetched time unknown' : 'fetched ' + age + ' ago';
+    return 'from origin/main PROGRESS.md @ ' + sha7() + ', ' + fetched;
+  }
+
+  // Simple client-side mirror of three rules in dashboard/lib/contradictions.mjs.
+  function contradictionsOf(slices) {
+    var out = [];
+    var inProgress = [];
+    slices.forEach(function (s) {
+      var pr = isObj(s.pr) ? s.pr : null;
+      var id = String(s.id);
+      if (s.status === 'in-progress') inProgress.push(id);
+      if (!pr || pr.merged !== true) return;
+      if (s.status === 'in-progress') {
+        out.push('Slice ' + id + ' is marked in progress, but PR #' + pr.number + ' that carries it is already merged.');
+      }
+      if (s.status !== 'merged') {
+        out.push('PR #' + pr.number + ' is merged, but slice ' + id + ' is not shown as merged in PROGRESS.md.');
+      }
+    });
+    if (inProgress.length >= 2) {
+      out.push(inProgress.length + ' slices are in progress at once (' + inProgress.join(', ') + '); the workflow expects one.');
+    }
+    return out;
+  }
+
+  function renderBanner(now) {
+    var banner = byId('blind');
+    var detail = byId('blind-detail');
+    detail.textContent = '';
+    if (!isStale(now)) {
+      banner.classList.add('hidden');
+      return;
+    }
+    banner.classList.remove('hidden');
+    var parts = [];
+    if (loadError) parts.push('Could not load status.json: ' + loadError);
+    if (snapshot && snapshot.ok !== true && snapshot.error) parts.push('Snapshot error: ' + String(snapshot.error));
+    var age = ageOf(fetchedMs(), now);
+    if (age !== null) parts.push('Snapshot fetched ' + age + ' ago.');
+    detail.textContent = parts.join(' ');
+  }
+
+  function renderContradictions(slices) {
+    var list = byId('contra-list');
+    var items = contradictionsOf(slices);
+    byId('contra-count').textContent = 'Contradictions: ' + items.length;
+    list.textContent = '';
+    items.forEach(function (text) { list.appendChild(el('li', null, text)); });
+  }
+
+  function sliceCard(s, now) {
+    var card = el('article', 'card');
+    var pr = isObj(s.pr) ? s.pr : null;
+    card.appendChild(el('h3', null, String(s.id) + ' ' + String(s.title || '')));
+
+    var statusLine = 'Status: ' + String(s.status || 'unknown');
+    if (s.mergedBy) statusLine += ' · merged by ' + String(s.mergedBy);
+    card.appendChild(el('div', 'line', statusLine));
+
+    if (pr) {
+      var prLine = el('div', 'line');
+      var prHref = safeUrl(pr.htmlUrl);
+      var prLabel = 'PR #' + pr.number + (pr.title ? ': ' + pr.title : '');
+      if (prHref) {
+        var link = el('a', null, prLabel);
+        link.href = prHref;
+        link.target = '_blank';
+        link.rel = 'noopener';
+        prLine.appendChild(link);
+      } else {
+        prLine.textContent = prLabel;
+      }
+      card.appendChild(prLine);
+      var pushed = typeof pr.pushedAt === 'string' ? Date.parse(pr.pushedAt) : NaN;
+      if (isFinite(pushed) && now - pushed >= STALE_PUSH_MS) {
+        card.appendChild(el('div', 'line warn', 'no push for ' + ageOf(pushed, now)));
+      }
+    }
+
+    if (Array.isArray(s.checks) && s.checks.length > 0) {
+      var ul = el('ul', 'checks');
+      s.checks.filter(isObj).forEach(function (c) {
+        var li = el('li');
+        var result = c.conclusion || c.status || 'unknown';
+        var cls = c.conclusion === 'success' ? 'ok' : (c.conclusion ? 'bad' : 'muted');
+        li.appendChild(el('span', cls, String(c.name || 'check') + ': ' + result));
+        var runHref = safeUrl(c.htmlUrl) || safeUrl(c.url);
+        if (runHref) {
+          li.appendChild(document.createTextNode(' '));
+          var a = el('a', null, 'run');
+          a.href = runHref;
+          a.target = '_blank';
+          a.rel = 'noopener';
+          li.appendChild(a);
+        }
+        ul.appendChild(li);
+      });
+      card.appendChild(ul);
+    }
+
+    card.appendChild(el('div', 'foot', footerText(now)));
+    return card;
+  }
+
+  function renderSlices(slices, now) {
+    var box = byId('slices');
+    box.textContent = '';
+    if (slices.length === 0) {
+      box.appendChild(el('p', 'empty', 'No slices in this snapshot.'));
+      return;
+    }
+    var groups = [
+      { key: 'in-progress', label: 'In progress' },
+      { key: 'open', label: 'Open' },
+      { key: 'merged', label: 'Merged' }
+    ];
+    groups.forEach(function (g) {
+      var members = slices.filter(function (s) {
+        var st = s.status === 'in-progress' || s.status === 'merged' ? s.status : 'open';
+        return st === g.key;
+      });
+      box.appendChild(el('h3', null, g.label + ' (' + members.length + ')'));
+      if (members.length === 0) {
+        box.appendChild(el('p', 'empty', 'None.'));
+      }
+      members.forEach(function (s) { box.appendChild(sliceCard(s, now)); });
+    });
+  }
+
+  function renderPushed(prOnly, now) {
+    var box = byId('pushed');
+    box.textContent = '';
+    if (prOnly.length === 0) {
+      box.appendChild(el('p', 'empty', 'Nothing pushed without a slice on main.'));
+      return;
+    }
+    prOnly.forEach(function (s) { box.appendChild(sliceCard(s, now)); });
+  }
+
+  function render() {
+    var now = Date.now();
+    var state = snapshot && isObj(snapshot.state) ? snapshot.state : null;
+    var slices = state && Array.isArray(state.slices) ? state.slices.filter(isObj) : [];
+    var prOnly = state && Array.isArray(state.prOnly) ? state.prOnly.filter(isObj) : [];
+
+    var age = ageOf(fetchedMs(), now);
+    byId('top-line').textContent = age === null
+      ? 'Read-only view. Snapshot time unknown.'
+      : 'Read-only view. Snapshot fetched ' + age + ' ago.';
+
+    renderBanner(now);
+    renderContradictions(slices);
+    renderSlices(slices, now);
+    renderPushed(prOnly, now);
+  }
+
+  function load() {
+    fetch('status.json?t=' + Date.now(), { cache: 'no-store' })
+      .then(function (r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      })
+      .then(function (json) {
+        snapshot = isObj(json) ? json : null;
+        loadError = null;
+        render();
+      })
+      .catch(function (err) {
+        loadError = String((err && err.message) || err);
+        render();
+      });
+  }
+
+  load();
+  setInterval(load, RELOAD_MS);
+  setInterval(render, RERENDER_MS);
+})();
+</script>
+</body>
+</html>
