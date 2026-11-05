@@ -35,8 +35,9 @@ function parseSlices(text) {
     if (!id) continue;
     const isChecked = m[1] === 'x';
     const merged = isChecked ? MERGED_SUFFIX.exec(line) : null;
-    let progressStatus = 'open';
-    if (merged) progressStatus = 'merged';
+    // [x] is done ('merged'); [IN_PROGRESS] is in-progress; any other unchecked slice is planned.
+    let progressStatus = 'planned';
+    if (isChecked) progressStatus = 'merged';
     else if (line.includes('[IN_PROGRESS]')) progressStatus = 'in-progress';
     out.push({
       id,
