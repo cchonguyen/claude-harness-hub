@@ -43,6 +43,7 @@ Slice colour tags: `[UI / VISUAL]` needs typecheck only. `[CORE / DATA]` needs t
 - Once the operator approves an implementation, commit, push and open a pull request without asking again.
 - Do not deploy, force-push, delete branches, close or reopen pull requests, or change repository visibility without the operator's explicit yes for that action.
 - If the operator has approved the work for the slices at the start of a stage, that approval is the go-ahead. One approval for the plan means merge each slice's pull request automatically when it is complete. No further yes is needed for those merges.
+- Auto-merge standing rule (applies to every project through the harness plugin): when a pull request is green (all required checks passing, not a draft) and the operator has already approved the work, merge it automatically without waiting for a click. Ask only if the work is not approved, checks are red or missing, or the merge would revert or overwrite something the operator has not approved.
 - Before asking the operator who merged a pull request, check the merge record on GitHub (merger and merge time). Ask only when the record does not show it. Never ask about a merge the operator has already made.
 - Put the typecheck, lint and test results in the pull request description.
 - The `Harness slice gate` check must pass. It needs a slice line in `.spec/PROGRESS.md` and a head commit with Referee trailers. A quick fix or a vibe-mode change will show red, by design.
