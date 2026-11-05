@@ -21,3 +21,4 @@
 - [x] **Slice 8.7: Referee Stamp for the Slice 8.6 PR Head** [CORE / DATA] Target files: .spec/PROGRESS.md | Verify: node --test .harness/scripts/finish-slice.test.mjs
 - [x] **Slice 9.1: Merge-Time Reconciler** [CORE / DATA] Target files: .harness/scripts/accept-plan.mjs, .harness/scripts/accept-plan.test.mjs, .github/workflows/accept-plan.yml, .spec/PROGRESS.md | Coords: [000, 305] | Verify: node --test .harness/scripts/accept-plan.test.mjs
 - [x] **Slice 9.2: Derived State Reader** [CORE / DATA] Target files: dashboard/lib/derive-state.mjs [NEW], dashboard/lib/github.mjs [NEW], dashboard/lib/derive-state.test.mjs [NEW], dashboard/command-center.mjs | Coords: [000, 305] | Verify: node --test dashboard/lib/derive-state.test.mjs dashboard/lib/progress.test.mjs
+- [ ] **Slice 9.3: Referee Stamp for the Auto-Verify PR Head** [IN_PROGRESS] [CORE / DATA] Target files: .spec/PROGRESS.md | Verify: node --test .harness/scripts/finish-slice.test.mjs
