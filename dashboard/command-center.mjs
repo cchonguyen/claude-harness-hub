@@ -20,6 +20,8 @@ import crypto from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { parseInProgress } from './lib/progress.mjs';
+import { buildSnapshot as buildDerivedSnapshot } from './lib/snapshot.mjs';
+import { tokenFromEnv } from './lib/github.mjs';
 
 const execFileP = promisify(execFile);
 
@@ -225,6 +227,44 @@ async function headSha(wtPath) {
   }
 }
 
+// ---------- derived state (GitHub-backed, cached) ----------
+
+const DERIVED_REPO = process.env.GITHUB_REPOSITORY || 'cchonguyen/claude-harness-hub';
+const DERIVED_CACHE_MS = 60 * 1000;
+let derivedCache = { at: 0, value: null }; // value: result of lib/snapshot.mjs buildSnapshot
+let derivedInFlight = null;
+
+/**
+ * Promise for a derived snapshot, at most one fetch per DERIVED_CACHE_MS.
+ * Concurrent callers share one in-flight promise. Never rejects.
+ */
+function derivedSnapshot() {
+  try {
+    if (derivedCache.value && Date.now() - derivedCache.at < DERIVED_CACHE_MS) {
+      return Promise.resolve(derivedCache.value);
+    }
+    if (!derivedInFlight) {
+      const run = (async () => {
+        let value;
+        try {
+          value = await buildDerivedSnapshot({ repo: DERIVED_REPO, cwd: HARNESS_ROOT, token: tokenFromEnv(process.env) });
+        } catch {
+          value = { ok: false, error: 'derived snapshot failed', fetchedAt: new Date().toISOString() };
+        }
+        derivedCache = { at: Date.now(), value };
+        return value;
+      })().finally(() => {
+        derivedInFlight = null;
+      });
+      derivedInFlight = run;
+      run.then(() => broadcast(), () => {});
+    }
+    return derivedInFlight;
+  } catch {
+    return Promise.resolve(derivedCache.value);
+  }
+}
+
 async function buildSnapshot() {
   const now = Date.now();
   const agents = await herdrAgents();
@@ -295,7 +335,11 @@ async function buildSnapshot() {
     }
   }
 
-  return { generatedAt: new Date(now).toISOString(), stages: STAGES, cards };
+  // Never awaited here: use the cached value (or null) now; a fetch in progress lands via broadcast().
+  derivedSnapshot();
+  const derived = derivedCache.value;
+  const derivedBlind = !derived || derived.ok !== true;
+  return { generatedAt: new Date(now).toISOString(), stages: STAGES, cards, derived, derivedBlind };
 }
 
 // ---------- live updates (SSE) ----------
