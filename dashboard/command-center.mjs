@@ -22,6 +22,7 @@ import { promisify } from 'node:util';
 import { parseInProgress } from './lib/progress.mjs';
 import { buildSnapshot as buildDerivedSnapshot } from './lib/snapshot.mjs';
 import { tokenFromEnv } from './lib/github.mjs';
+import { detectContradictions, freshnessLabel } from './lib/contradictions.mjs';
 
 const execFileP = promisify(execFile);
 
@@ -339,7 +340,11 @@ async function buildSnapshot() {
   derivedSnapshot();
   const derived = derivedCache.value;
   const derivedBlind = !derived || derived.ok !== true;
-  return { generatedAt: new Date(now).toISOString(), stages: STAGES, cards, derived, derivedBlind };
+  // No local HEAD vs origin/main check exists in this file, so localHeadBehind is null.
+  const lastFetchAt = derivedCache.value && derivedCache.at ? new Date(derivedCache.at).toISOString() : null;
+  const contradictions = derived ? detectContradictions({ snapshot: derived, now, localHeadBehind: null, lastFetchAt }) : null;
+  const derivedFreshness = freshnessLabel(lastFetchAt, now);
+  return { generatedAt: new Date(now).toISOString(), stages: STAGES, cards, derived, derivedBlind, contradictions, derivedFreshness };
 }
 
 // ---------- live updates (SSE) ----------
