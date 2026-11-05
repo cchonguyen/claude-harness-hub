@@ -64,6 +64,7 @@ function parseArgs() {
     verificationData: null,
     internalKey: null,
     bypassDecisions: null,
+    removeSlice: null,
     help: false
   };
 
@@ -79,6 +80,7 @@ function parseArgs() {
     else if (arg === '--set-verification' && args[i + 1]) options.verificationData = args[++i];
     else if (arg === '--internal-key' && args[i + 1]) options.internalKey = args[++i];
     else if (arg === '--bypass-decisions' && args[i + 1]) options.bypassDecisions = args[++i];
+    else if (arg === '--remove-slice' && args[i + 1]) options.removeSlice = args[++i];
     else if (arg === '--help' || arg === '-h') options.help = true;
   }
 
@@ -100,6 +102,7 @@ Options:
   --set-verification <json>      Set verification evidence block (restricted)
   --internal-key <token>         Security token for Verified/Accepted stages
   --bypass-decisions '<reason>'  Explicitly bypass the decision requirement; logs a recentDecisions entry (min 10 chars)
+  --remove-slice <id>            Remove a slice from activeSlices (one dashboard card per slice)
 `);
 }
 
@@ -162,11 +165,29 @@ function main() {
   if (options.intent) state.currentIntent = options.intent;
   if (options.stage) state.stage = options.stage;
 
+  // activeSlices: one entry per slice (each becomes a dashboard card). activeSlice is kept for older readers.
+  if (!Array.isArray(state.activeSlices)) {
+    state.activeSlices = state.activeSlice?.id
+      ? [{ id: state.activeSlice.id, title: state.activeSlice.title, stage: state.stage }]
+      : [];
+  }
   if (options.sliceId || options.sliceTitle) {
-    state.activeSlice = {
-      id: options.sliceId || state.activeSlice?.id || 'slice-01',
-      title: options.sliceTitle || state.activeSlice?.title || 'Active Slice'
-    };
+    const sid = options.sliceId || state.activeSlice?.id || 'slice-01';
+    const stitle = options.sliceTitle || state.activeSlice?.title || 'Active Slice';
+    const prev = state.activeSlices.find(s => s.id === sid) || {};
+    const entry = { id: sid, title: stitle, stage: options.stage || prev.stage || state.stage, updatedAt: new Date().toISOString() };
+    state.activeSlices = state.activeSlices.filter(s => s.id !== sid).concat([entry]);
+    state.activeSlice = { id: sid, title: stitle };
+  } else if (options.stage && state.activeSlice?.id) {
+    // Stage change without --slice-id applies to the current slice.
+    state.activeSlices = state.activeSlices.map(s => s.id === state.activeSlice.id ? { ...s, stage: options.stage, updatedAt: new Date().toISOString() } : s);
+  }
+  if (options.removeSlice) {
+    state.activeSlices = state.activeSlices.filter(s => s.id !== options.removeSlice);
+    if (state.activeSlice?.id === options.removeSlice) {
+      const last = state.activeSlices[state.activeSlices.length - 1];
+      state.activeSlice = last ? { id: last.id, title: last.title } : undefined;
+    }
   }
 
   if (options.addDecision) {

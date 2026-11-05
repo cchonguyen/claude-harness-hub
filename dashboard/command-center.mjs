@@ -224,42 +224,51 @@ async function buildSnapshot() {
     const herdr = herdrForWorktree(agents, wt.path);
     const updatedMs = state?.updatedAt ? Date.parse(state.updatedAt) : NaN;
     const stale = Number.isFinite(updatedMs) && now - updatedMs > STALE_MS && herdr.state === 'Offline';
-
-    let stage = state?.stage && STAGES.includes(state.stage) ? state.stage : 'Design';
     const ver = state?.verification || null;
-    let badge = null;
-    // Epistemic gate: verified/accepted evidence must match the current HEAD.
-    if ((stage === 'Verified' || stage === 'Accepted') && (!ver || ver.evidenceCommitSha !== currentHeadSha)) {
-      badge = 'EVIDENCE STALE (HEAD != Verified SHA)';
-      stage = 'Claimed';
-    }
-    const canAccept =
-      state?.stage === 'Verified' && ver?.testsPassing === true && ver?.evidenceCommitSha === currentHeadSha;
+    // Verification and acceptance are still per worktree: only the worktree-level stage can be accepted.
+    const canAccept = state?.stage === 'Verified' && ver?.testsPassing === true && ver?.evidenceCommitSha === currentHeadSha;
+    const worktreeStage = state?.stage && STAGES.includes(state.stage) ? state.stage : 'Design';
 
-    cards.push({
-      repo: wt.repo,
-      worktree: wt.path,
-      worktreeId: path.basename(wt.path),
-      branch: state?.branch || null,
-      currentIntent: state?.currentIntent || null,
-      activeSlice: state?.activeSlice?.id
-        ? { id: String(state.activeSlice.id), title: String(state.activeSlice.title || '') }
-        : null,
-      stage,
-      rawStage: state?.stage || null,
-      badge,
-      stale,
-      staleLabel: stale ? 'STALE (>30m)' : null,
-      updatedAt: state?.updatedAt || null,
-      pendingDecisions: Array.isArray(state?.pendingDecisions) ? state.pendingDecisions.length : 0,
-      verification: ver ? { testsPassing: ver.testsPassing, evidenceCommitSha: ver.evidenceCommitSha } : null,
-      currentHeadSha,
-      canAccept,
-      herdr: herdr.state,
-      herdrAgentId: herdr.agentId,
-      handoffUpdatedAt: fileMtime(path.join(wt.path, '.spec', 'HANDOFF_PACKET.md')),
-    });
+    // One card per active slice; a worktree with no slices gets one card for its worktree-level stage.
+    const slices = Array.isArray(state?.activeSlices) && state.activeSlices.length
+      ? state.activeSlices.map((s) => ({ id: String(s.id), title: String(s.title || ''), stage: s.stage || null }))
+      : [null];
+
+    for (const sl of slices) {
+      const baseStage = sl?.stage && STAGES.includes(sl.stage) ? sl.stage : worktreeStage;
+      let stage = baseStage;
+      let badge = null;
+      // Epistemic gate: verified/accepted evidence must match the current HEAD.
+      if ((stage === 'Verified' || stage === 'Accepted') && (!ver || ver.evidenceCommitSha !== currentHeadSha)) {
+        badge = 'EVIDENCE STALE (HEAD != Verified SHA)';
+        stage = 'Claimed';
+      }
+      cards.push({
+        repo: wt.repo,
+        worktree: wt.path,
+        worktreeId: path.basename(wt.path),
+        sliceId: sl?.id || null,
+        sliceTitle: sl?.title || null,
+        branch: state?.branch || null,
+        currentIntent: state?.currentIntent || null,
+        activeSlice: sl?.id ? { id: sl.id, title: sl.title } : (state?.activeSlice?.id ? { id: String(state.activeSlice.id), title: String(state.activeSlice.title || '') } : null),
+        stage,
+        rawStage: baseStage,
+        badge,
+        stale,
+        staleLabel: stale ? 'STALE (>30m)' : null,
+        updatedAt: state?.updatedAt || null,
+        pendingDecisions: Array.isArray(state?.pendingDecisions) ? state.pendingDecisions.length : 0,
+        verification: ver ? { testsPassing: ver.testsPassing, evidenceCommitSha: ver.evidenceCommitSha } : null,
+        currentHeadSha,
+        canAccept,
+        herdr: herdr.state,
+        herdrAgentId: herdr.agentId,
+        handoffUpdatedAt: fileMtime(path.join(wt.path, '.spec', 'HANDOFF_PACKET.md')),
+      });
+    }
   }
+
   return { generatedAt: new Date(now).toISOString(), stages: STAGES, cards };
 }
 

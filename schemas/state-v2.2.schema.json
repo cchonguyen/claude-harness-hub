@@ -55,6 +55,20 @@
       ],
       "description": "Unified epistemic progression. 'Verified' requires automated test runner pass; 'Accepted' requires explicit human confirmation."
     },
+    "activeSlices": {
+      "type": "array",
+      "description": "All active slices in this worktree. The dashboard shows one card per entry.",
+      "items": {
+        "type": "object",
+        "required": ["id", "title"],
+        "properties": {
+          "id": { "type": "string" },
+          "title": { "type": "string" },
+          "stage": { "type": "string", "enum": ["Design", "Falcon-Review", "Implementation", "Claimed", "Verified", "Accepted"] },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        }
+      }
+    },
     "activeSlice": {
       "type": "object",
       "description": "Active feature slice. Optional during Design; required from Falcon-Review onward.",
