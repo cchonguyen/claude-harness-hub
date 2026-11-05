@@ -1,0 +1,48 @@
+name: Accept plan
+
+on:
+  push:
+    branches: [main]
+    paths: ['.spec/plans/*.md']
+
+permissions:
+  contents: write
+
+jobs:
+  accept:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Accept slices listed in changed plan files
+        run: |
+          files=$(git diff --name-only --diff-filter=AM "${{ github.event.before }}" "${{ github.sha }}" -- '.spec/plans/*.md' | grep -v README.md || true)
+          if [ -z "$files" ]; then
+            echo "No plan files added or changed by this push."
+            exit 0
+          fi
+          status=0
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            echo "Accepting slices from $f"
+            node .harness/scripts/accept-plan.mjs "$f" || status=1
+          done <<< "$files"
+          exit $status
+
+      - name: Commit updated PROGRESS.md
+        run: |
+          if git diff --quiet -- .spec/PROGRESS.md; then
+            echo "PROGRESS.md unchanged."
+            exit 0
+          fi
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add .spec/PROGRESS.md
+          git commit -m "chore(spec): accept slices from merged plan"
+          git push origin HEAD:main
