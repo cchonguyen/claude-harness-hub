@@ -1,0 +1,90 @@
+name: Status snapshot
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: status-snapshot
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build status snapshot
+        # A not-ok snapshot is still written; the page shows that it is blind.
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node dashboard/lib/snapshot.mjs dashboard/site/status.json
+
+      - name: Prepare page
+        run: |
+          mkdir -p dashboard/site
+          if [ -f dashboard/index.html ]; then
+            cp dashboard/index.html dashboard/site/index.html
+          else
+            cat > dashboard/site/index.html <<'EOF'
+          <!doctype html>
+          <html lang="en">
+          <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <title>Harness status</title>
+          </head>
+          <body>
+          <h1>Harness status</h1>
+          <p id="age">Loading snapshot...</p>
+          <pre id="body"></pre>
+          <script>
+          fetch('status.json', { cache: 'no-store' })
+            .then(function (r) { return r.json(); })
+            .then(function (s) {
+              var age = 'unknown';
+              var made = Date.parse(s.fetchedAt);
+              if (!isNaN(made)) {
+                age = Math.max(0, Math.floor((Date.now() - made) / 60000)) + 'm';
+              }
+              document.getElementById('age').textContent =
+                (s.ok ? 'snapshot ' : 'BLIND, snapshot ') + age + ' old';
+              document.getElementById('body').textContent =
+                s.ok ? JSON.stringify(s.state, null, 2) : 'Error: ' + s.error;
+            })
+            .catch(function (e) {
+              document.getElementById('age').textContent = 'status.json unreadable: ' + e;
+            });
+          </script>
+          </body>
+          </html>
+          EOF
+          fi
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dashboard/site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
