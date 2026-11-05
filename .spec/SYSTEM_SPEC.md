@@ -20,7 +20,7 @@
 - No change to hook, script, or dashboard behavior in this release.
 - No git history rewrite or force push without the owner's explicit approval.
 - No visibility, branch protection, or secret changes made through the API. The owner changes visibility in GitHub's settings.
-- No authentication layer or hosted deployment for the dashboard.
+- No authentication layer for the dashboard. The only hosted surface is the read-only status page published by `.github/workflows/status-snapshot.yml` (ADR-011). It has no write path and no token in the page.
 - No new features, slices, or dependency changes.
 
 ### Existing boundaries
@@ -44,6 +44,15 @@
 - The "last known green" checkpoint advances only when a command that executes code passes: test runners (`vitest`, `jest`, `pytest`, `node --test`, `npm|pnpm|yarn|bun test`) or a build (`npm|pnpm|yarn|bun run build`).
 - Static checks (`eslint`, `ruff check`, `ruff format --check`, `mypy`, `pyright`, `tsc`, `typecheck`, `lint` scripts) still count toward the circuit breaker and still get their output scrubbed, but a pass never advances the checkpoint. Lint-clean code can still be logically broken, and locking it in would make a restore land on a regression.
 - If a project has no test or build command, no checkpoint ever advances; `--restore` then only lists the changed files, as it does before the first pass.
+
+### Dashboard State Sources (ADR-011)
+The dashboard derives state and never reads agent-written state files. Its sources are:
+- **`PROGRESS.md` on `origin/main`:** slices, order, targets, and the `Merged` suffix.
+- **GitHub pull requests and check runs:** slices in progress, work pushed but not on `main`, and CI results.
+- **Merge records:** the merger and the merge time.
+- **Local Herdr panes:** local liveness only. Remote work does not use them.
+
+The hosted status page reads only the published `status.json`. The local Command Center reads the same derived state on port 3456. Each card shows its source and age, and disagreements between sources are listed, not resolved silently. See [ADR-011](DECISIONS.md).
 
 ## 4. Harness v3.0 "Manager Mode" Contract (locked 2026-11-01, not yet built)
 Source: Claude review of the v3.0 RFC, operator decisions, and the Antigravity adversarial review (ADR-008). Build order is in `.spec/PROGRESS.md` (Slices 3.0 to 3.5). Until those slices ship, sections 1 to 3 above describe what actually runs.
