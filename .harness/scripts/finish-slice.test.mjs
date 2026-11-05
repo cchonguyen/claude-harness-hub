@@ -416,3 +416,41 @@ test('finishSlice fails with a clear error when bin/update-state.mjs is absent (
   );
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+function makeFinishableRepo() {
+  const dir = makeRepo();
+  const git = (...args) => execFileSync('git', args, { cwd: dir, stdio: 'ignore' });
+  fs.mkdirSync(path.join(dir, '.spec'), { recursive: true });
+  fs.mkdirSync(path.join(dir, '.harness', 'scripts'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.harness', 'scripts', 'referee.mjs'), '// referee');
+  fs.writeFileSync(path.join(dir, '.spec', 'PROGRESS.md'), '# Progress\n- [ ] **Slice 1** `[GREEN][CORE / DATA]`: Test — Target files: test.txt [IN_PROGRESS]\n');
+  fs.writeFileSync(path.join(dir, 'test.txt'), 'content');
+  git('add', '-A');
+  git('commit', '-m', 'init');
+  fs.writeFileSync(path.join(dir, 'test.txt'), 'updated');
+  return dir;
+}
+
+test('finishSlice reports a passing auto-verify result', () => {
+  const dir = makeFinishableRepo();
+  const result = finishSlice(dir, 'feat: finish slice 1', {
+    skipChecks: true,
+    dashboardSync: fakeDashboardSync,
+    verify: () => ({ ran: true, passed: true }),
+  });
+  assert.equal(result.verification.passed, true);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('finishSlice keeps the commit when auto-verify is skipped or fails', () => {
+  const dir = makeFinishableRepo();
+  const result = finishSlice(dir, 'feat: finish slice 1', {
+    skipChecks: true,
+    dashboardSync: fakeDashboardSync,
+    verify: () => ({ ran: false, reason: 'x' }),
+  });
+  assert.equal(result.success, true);
+  const subject = execFileSync('git', ['log', '-1', '--format=%s'], { cwd: dir, encoding: 'utf8' }).trim();
+  assert.equal(subject, 'feat: finish slice 1');
+  fs.rmSync(dir, { recursive: true, force: true });
+});
