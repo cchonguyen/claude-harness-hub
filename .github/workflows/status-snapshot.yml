@@ -36,8 +36,8 @@ jobs:
       - name: Prepare page
         run: |
           mkdir -p dashboard/site
-          if [ -f dashboard/index.html ]; then
-            cp dashboard/index.html dashboard/site/index.html
+          if [ -f dashboard/status-page.html ]; then
+            cp dashboard/status-page.html dashboard/site/index.html
           else
             cat > dashboard/site/index.html <<'EOF'
           <!doctype html>
