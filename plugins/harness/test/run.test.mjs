@@ -75,5 +75,9 @@ test('hooks.json routes every event through run.mjs', () => {
   const cfg = JSON.parse(fs.readFileSync(new URL('../hooks/hooks.json', import.meta.url), 'utf8'));
   const cmds = Object.values(cfg.hooks).flat().flatMap((m) => m.hooks.map((h) => h.command));
   assert.ok(cmds.length >= 6);
-  for (const c of cmds) assert.match(c, /\$\{CLAUDE_PLUGIN_ROOT\}\/hooks\/run\.mjs" \S+\.mjs$/);
+  // refresh.mjs runs before the repo adapter exists (it installs the plugin the adapter comes from), so it is exempt.
+  for (const c of cmds) {
+    if (c.includes('/hooks/refresh.mjs"')) continue;
+    assert.match(c, /\$\{CLAUDE_PLUGIN_ROOT\}\/hooks\/run\.mjs" \S+\.mjs$/);
+  }
 });
