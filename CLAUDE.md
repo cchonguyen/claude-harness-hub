@@ -55,12 +55,9 @@ Slice colour tags: `[UI / VISUAL]` needs typecheck only. `[CORE / DATA]` needs t
 Finish everything that does not depend on the blocker first. Then end your reply with a `Needed from you:` block of numbered, concrete steps. Put nothing after it.
 
 ## Dashboard and slice tracking (required)
-Whenever executing work in any repository:
-1. When starting a new feature slice or milestone:
-   - Run `node ~/Projects/harness-hub/claude-harness-hub/bin/update-state.mjs --slice-id <id> --slice-title '<title>' --intent '<goal>' --stage Implementation`
-2. If you hit an architectural blocker or need a human decision:
-   - Run `node ~/Projects/harness-hub/claude-harness-hub/bin/update-state.mjs --add-decision '<id>:<question>:<contextFile>'`
-3. When coding is complete:
-   - Set stage to Claimed: `node ~/Projects/harness-hub/claude-harness-hub/bin/update-state.mjs --stage Claimed`
-   - Run verification immediately: `~/Projects/harness-hub/claude-harness-hub/bin/verify-slice.sh`
-   - Ask the user to review and click "Accept Verified Slice" on the dashboard at http://127.0.0.1:3456/.
+Run these from the repo root, with the `bin/` paths. Run them without asking. The main thread and `harness:gf-coder` both run them.
+1. Slice start: `node bin/update-state.mjs --slice-id <id> --slice-title '<title>' --intent '<goal>' --stage Implementation`
+2. Blocker or human decision: `node bin/update-state.mjs --add-decision '<id>:<question>:<contextFile>'`. Keep working on anything that does not depend on it.
+3. Coding complete: run `bin/verify-slice.sh`. It sets `Claimed` when it starts and `Verified` on a pass. Never set `Verified` or `Accepted` by hand.
+4. Acceptance is the one human gate. End with a one-line receipt asking the operator to click "Accept Verified Slice" at http://127.0.0.1:3456/ (or run `bin/accept-slice.sh`).
+The verify secret lives only on the operator's machine, so `verify-slice.sh` stops at once in the cloud. That is by design: a secret in the cloud would let an agent set `Accepted`.
