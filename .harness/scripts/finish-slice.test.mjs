@@ -7,6 +7,12 @@ import path from 'node:path';
 import { finishSlice, parseActiveTargets } from './finish-slice.mjs';
 import { startSlice } from './start-slice.mjs';
 import { verifyHeadTrust } from './referee.mjs';
+import { appendCall, readCalls } from './lib/telemetry.mjs';
+
+// Records one subagent dispatch for the slice, as the PostToolUse telemetry hook would.
+function seedDispatch(dir, sliceId = '1') {
+  appendCall(dir, { ts: new Date().toISOString(), tool: 'Agent', agentType: 'harness:gf-coder', role: 'goldfish', filePath: '', slice: sliceId });
+}
 
 function makeRepo() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'finish-slice-test-'));
@@ -39,6 +45,7 @@ test('finishSlice updates PROGRESS.md, commits with Referee trailers, and verify
 
   // Modify test.txt as part of the slice
   fs.writeFileSync(path.join(dir, 'test.txt'), 'updated content');
+  seedDispatch(dir);
 
   const result = finishSlice(dir, 'feat: finish slice 1', { skipChecks: true });
   assert.equal(result.success, true);
@@ -213,6 +220,7 @@ test('finishSlice single-commit auto-advance promotes next pending slice to [IN_
 
   // Modify a.txt for slice 1
   fs.writeFileSync(path.join(dir, 'a.txt'), 'a updated');
+  seedDispatch(dir);
 
   const res = finishSlice(dir, 'feat: finish slice 1 with auto-advance', { skipChecks: true });
   assert.equal(res.success, true);
@@ -256,6 +264,7 @@ test('finishSlice handles last slice completion without auto-advance', () => {
   git('commit', '-m', 'init last slice');
 
   fs.writeFileSync(path.join(dir, 'a.txt'), 'a finished');
+  seedDispatch(dir);
 
   const res = finishSlice(dir, 'feat: finish final slice', { skipChecks: true });
   assert.equal(res.success, true);
@@ -294,7 +303,7 @@ test('finishSlice git staging filters gitignored tracking files and succeeds', (
 
   // Modify a.txt and write telemetry file that matches .gitignore
   fs.writeFileSync(path.join(dir, 'a.txt'), 'a modified');
-  fs.writeFileSync(path.join(dir, '.spec', '.session-telemetry.json'), JSON.stringify({ slicesCommitted: 0 }));
+  seedDispatch(dir);
 
   const res = finishSlice(dir, 'feat: finish with ignored telemetry', { skipChecks: true });
   assert.equal(res.success, true);
@@ -361,8 +370,44 @@ function makeFinishableRepo() {
   return dir;
 }
 
+test('finishSlice refuses when no subagent dispatch is recorded for the slice', () => {
+  const dir = makeFinishableRepo();
+  assert.throws(
+    () => finishSlice(dir, 'feat: finish slice 1', { skipChecks: true }),
+    /no subagent dispatch recorded for slice 1/
+  );
+  const progressText = fs.readFileSync(path.join(dir, '.spec', 'PROGRESS.md'), 'utf8');
+  assert.match(progressText, /\[IN_PROGRESS\]/);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('finishSlice refuses when the main thread wrote a source file for the slice', () => {
+  const dir = makeFinishableRepo();
+  seedDispatch(dir);
+  appendCall(dir, { ts: new Date().toISOString(), tool: 'Edit', agentType: '', role: 'coordinator', filePath: 'test.txt', slice: '1' });
+  assert.throws(
+    () => finishSlice(dir, 'feat: finish slice 1', { skipChecks: true }),
+    /main thread wrote 1 source file\(s\) for slice 1: test\.txt/
+  );
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('finishSlice passes with one dispatch and no main writes, and stamps telemetry trailers', () => {
+  const dir = makeFinishableRepo();
+  seedDispatch(dir);
+  const res = finishSlice(dir, 'feat: finish slice 1', { skipChecks: true });
+  assert.equal(res.success, true);
+  assert.equal(readCalls(dir).length, 1);
+  const body = execFileSync('git', ['log', '-1', '--format=%B'], { cwd: dir, encoding: 'utf8' });
+  assert.match(body, /^Telemetry-Dispatches: 1$/m);
+  assert.match(body, /^Telemetry-Main-Source-Writes: 0$/m);
+  assert.match(body, /^Referee-Verdict: VERIFIED$/m);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
 test('finishSlice reports a passing auto-verify result', () => {
   const dir = makeFinishableRepo();
+  seedDispatch(dir);
   const result = finishSlice(dir, 'feat: finish slice 1', {
     skipChecks: true,
     verify: () => ({ ran: true, passed: true }),
@@ -373,6 +418,7 @@ test('finishSlice reports a passing auto-verify result', () => {
 
 test('finishSlice keeps the commit when auto-verify is skipped or fails', () => {
   const dir = makeFinishableRepo();
+  seedDispatch(dir);
   const result = finishSlice(dir, 'feat: finish slice 1', {
     skipChecks: true,
     verify: () => ({ ran: false, reason: 'x' }),

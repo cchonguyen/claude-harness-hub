@@ -46,9 +46,26 @@ test('IN_PROGRESS slice gets status in-progress', () => {
   assert.equal(s.slices[0].checks, null);
 });
 
-test('plain unchecked slice gets status open', () => {
+test('plain unchecked slice gets status planned', () => {
   const s = deriveState({ progressText: '- [ ] **Slice 9.3: Queued** [UI / VISUAL]\n' });
-  assert.equal(s.slices[0].status, 'open');
+  assert.equal(s.slices[0].status, 'planned');
+});
+
+test('checked slice without a merged PR marker gets status merged (done)', () => {
+  const s = deriveState({ progressText: '- [x] **Slice 9.5: Done** [CORE / DATA] Target files: a.mjs\n' });
+  assert.equal(s.slices[0].status, 'merged');
+  assert.equal(s.slices[0].source, 'PROGRESS.md');
+  assert.equal(s.slices[0].mergedBy, null);
+});
+
+test('in-progress, planned and done slices are told apart in one plan', () => {
+  const progressText = [
+    '- [x] **Slice 9.6: Done** [CORE / DATA]',
+    '- [ ] **Slice 9.7: Active** [IN_PROGRESS] [CORE / DATA]',
+    '- [ ] **Slice 9.8: Next** [CORE / DATA]',
+  ].join('\n');
+  const s = deriveState({ progressText });
+  assert.deepEqual(s.slices.map((x) => x.status), ['merged', 'in-progress', 'planned']);
 });
 
 test('Slice 8.3 does not match a PR titled Slice 8.30', () => {
@@ -127,7 +144,7 @@ test('malformed input does not throw', () => {
   const s = deriveState(bad[6]);
   assert.equal(s.slices.length, 1);
   assert.equal(s.slices[0].id, '5.1');
-  assert.equal(s.slices[0].status, 'open');
+  assert.equal(s.slices[0].status, 'merged');
   assert.equal(s.slices[0].pr.number, 4);
   assert.equal(s.slices[0].checks, null);
 });

@@ -14,22 +14,20 @@ const telemetryPath = path.join(root, '.spec', '.session-telemetry.json');
 let event = {};
 try { event = JSON.parse(fs.readFileSync(0, 'utf8')); } catch {}
 
-// Create session telemetry only when missing. An existing file is left alone.
+// Create session telemetry only when missing. An existing file is left alone (never reset).
 try {
   if (!fs.existsSync(telemetryPath)) {
     fs.mkdirSync(path.dirname(telemetryPath), { recursive: true });
-    fs.writeFileSync(
-      telemetryPath,
-      JSON.stringify({
-        sessionId: event.session_id || 'default',
-        startedAt: new Date().toISOString(),
-        totalToolCalls: 0,
-        mutatingCallsOnSlice: 0,
-        currentSlice: '',
-        slicesCommitted: 0
-      }, null, 2),
-      'utf8'
-    );
+    fs.writeFileSync(telemetryPath, JSON.stringify({
+      version: 1,
+      sessionId: event.session_id || 'default',
+      startedAt: new Date().toISOString(),
+      totalToolCalls: 0,
+      mutatingCallsOnSlice: 0,
+      currentSlice: '',
+      slicesCommitted: 0,
+      calls: []
+    }, null, 2), 'utf8');
   }
 } catch {}
 

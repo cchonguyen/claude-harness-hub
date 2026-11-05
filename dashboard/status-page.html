@@ -276,12 +276,13 @@ a { color: var(--accent); }
     }
     var groups = [
       { key: 'in-progress', label: 'In progress' },
+      { key: 'planned', label: 'Planned' },
       { key: 'open', label: 'Open' },
       { key: 'merged', label: 'Merged' }
     ];
     groups.forEach(function (g) {
       var members = slices.filter(function (s) {
-        var st = s.status === 'in-progress' || s.status === 'merged' ? s.status : 'open';
+        var st = s.status === 'in-progress' || s.status === 'planned' || s.status === 'merged' ? s.status : 'open';
         return st === g.key;
       });
       box.appendChild(el('h3', null, g.label + ' (' + members.length + ')'));
