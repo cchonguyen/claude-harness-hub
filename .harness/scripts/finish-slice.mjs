@@ -7,6 +7,7 @@ import { appendBatchEvent, resolveRoot } from './status-batch.mjs';
 import { getRefereeEngineHash, detectNaturalLull } from './referee.mjs';
 import { ensureHarnessRoot, atomicWriteFileSync } from './lib/fs-atomic.mjs';
 import { parseSliceLine } from './lib/slice-parser.mjs';
+import { syncDashboard, DASHBOARD_STAGE } from './lib/dashboard-sync.mjs';
 
 const gitIn = (cwd, args) =>
   execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
@@ -79,6 +80,7 @@ function filterIgnoredFiles(cwd, fileList) {
 }
 
 export function finishSlice(root, commitMsg, options = {}) {
+  const dashboardSync = options.dashboardSync || syncDashboard;
   ensureHarnessRoot();
   root = root || resolveRoot();
 
@@ -273,6 +275,15 @@ export function finishSlice(root, commitMsg, options = {}) {
     if (engineHash) {
       trailers.push('--trailer', `Referee-Engine: ${engineHash}`);
     }
+
+    // Dashboard rule: STATE.json must record this slice before the commit is made.
+    // A failed sync throws here, so PROGRESS.md is rolled back and nothing is committed.
+    const dashboardTrailerLine = dashboardSync(root, {
+      sliceId,
+      title: activeParsed.title || activeParsed.fullTitle || `Slice ${sliceId}`,
+      stage: DASHBOARD_STAGE,
+    });
+    trailers.push('--trailer', dashboardTrailerLine);
 
     gitIn(root, ['commit', '-m', commitMsg, ...trailers]);
     committed = true;

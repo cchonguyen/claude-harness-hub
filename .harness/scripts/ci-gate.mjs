@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 // CI gate for spoke repos. Two modes, both exit 1 on failure so the Actions check goes red.
 //   pr   <base> <head>     PR check. The PR must add a slice line to .spec/PROGRESS.md, and its head
-//                          commit must carry Referee trailers whose Referee-Tree matches the commit tree.
+//                          commit must carry Referee trailers whose Referee-Tree matches the commit tree,
+//                          plus a Dashboard-Sync trailer proving STATE.json was updated for the slice.
 //   push <before> <after>  Push watch. Lists non-merge commits in the push that lack a Referee-Verdict
 //                          trailer. Exits 1 when any are listed.
 import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
+import { hasDashboardTrailer, dashboardTrailer } from './lib/dashboard-sync.mjs';
 
 const ZERO_SHA = /^0+$/;
 const SLICE_LINE = /^\s*-\s*\[[^\]]*\]\s*\*\*Slice\s+[0-9]/;
@@ -36,40 +38,6 @@ export function addedSliceLines(diffText) {
     .filter((line) => SLICE_LINE.test(line));
 }
 
-const DASHBOARD_STAGES = new Set(['Claimed', 'Verified', 'Accepted']);
-
-/** Slice ids of the slice lines a PROGRESS.md diff adds (e.g. "7.3"). */
-export function sliceIdsFromProgressDiff(diffText) {
-  return addedSliceLines(diffText)
-    .map((line) => line.match(/\*\*Slice\s+([0-9]+(?:\.[0-9]+)*)/i)?.[1])
-    .filter(Boolean);
-}
-
-/** Problems with the dashboard state for these slices. stateText is the head's .spec/STATE.json, or null when the file is missing. */
-export function dashboardProblems({ sliceIds, stateText }) {
-  if (sliceIds.length === 0) return [];
-  if (stateText == null) {
-    return ['Dashboard: .spec/STATE.json is missing at the head commit. Run update-state.mjs for each slice and commit the file.'];
-  }
-  let state;
-  try {
-    state = JSON.parse(stateText);
-  } catch {
-    return ['Dashboard: .spec/STATE.json is not valid JSON.'];
-  }
-  const active = Array.isArray(state.activeSlices) ? state.activeSlices : [];
-  const problems = [];
-  for (const id of sliceIds) {
-    const entry = active.find((s) => s && s.id === id);
-    if (!entry) {
-      problems.push(`Dashboard: slice ${id} is not in .spec/STATE.json. Run update-state.mjs --slice-id ${id} with --stage Claimed.`);
-    } else if (!DASHBOARD_STAGES.has(entry.stage)) {
-      problems.push(`Dashboard: slice ${id} is at stage ${entry.stage}. Set it to Claimed when coding is complete.`);
-    }
-  }
-  return problems;
-}
-
 export function checkPullRequest({ base, head, cwd = process.cwd() }) {
   const problems = [];
   const progressDiff = git(['diff', '-U0', `${base}...${head}`, '--', '.spec/PROGRESS.md'], cwd);
@@ -78,6 +46,9 @@ export function checkPullRequest({ base, head, cwd = process.cwd() }) {
   }
 
   const message = git(['log', '-1', '--format=%B', head], cwd);
+  if (!hasDashboardTrailer(message)) {
+    problems.push('No dashboard sync: the head commit lacks a `Dashboard-Sync: Slice <id> <stage>` trailer, so STATE.json was not updated for this slice. Finish the slice with finish-slice.mjs, which runs bin/update-state.mjs before it commits.');
+  }
   if (!hasRefereeTrailer(message)) {
     problems.push('No Referee trailer: the head commit lacks `Referee-Verdict: VERIFIED` and `Referee-Tree`. Commit through finish-slice.mjs.');
   } else {
@@ -87,13 +58,6 @@ export function checkPullRequest({ base, head, cwd = process.cwd() }) {
       problems.push(`Stale verdict: Referee-Tree ${tree} does not match the head commit tree ${actual}. The commit changed after it was verified.`);
     }
   }
-  let stateText = null;
-  try {
-    stateText = git(['show', `${head}:.spec/STATE.json`], cwd);
-  } catch {
-    stateText = null;
-  }
-  problems.push(...dashboardProblems({ sliceIds: sliceIdsFromProgressDiff(progressDiff), stateText }));
   return problems;
 }
 
