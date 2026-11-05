@@ -34,8 +34,14 @@ function probeFastPathBudget() {
 
 function probeGfCoder(root) {
   const ok = fs.existsSync(path.join(root, 'plugins', 'harness', 'agents', 'gf-coder.md'));
-  return check('gf-coder-registered', 'fail', ok,
-    ok ? 'plugins/harness/agents/gf-coder.md present' : 'plugins/harness/agents/gf-coder.md missing');
+  if (ok) return check('gf-coder-registered', 'fail', true, 'plugins/harness/agents/gf-coder.md present');
+  // The hub sync no longer ships plugins/harness to spokes; the cloud setup script installs the plugin there.
+  const isSpoke = fs.existsSync(path.join(root, '.harness-version'));
+  const pluginNotSynced = !fs.existsSync(path.join(root, 'plugins', 'harness'));
+  if (isSpoke && pluginNotSynced) {
+    return check('gf-coder-registered', 'fail', true, 'plugin not synced to this spoke; installed by the setup script');
+  }
+  return check('gf-coder-registered', 'fail', false, 'plugins/harness/agents/gf-coder.md missing');
 }
 
 function probeHandoff(root) {
