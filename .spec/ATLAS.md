@@ -32,3 +32,4 @@ The single entry point and registry for harness-hub specification artifacts. Def
 - `430` [.spec/AI_STUDIO_RULES.md](AI_STUDIO_RULES.md) — AI Studio rules template
 - `440` [.spec/plans/README.md](plans/README.md) — Plan-merge approval format
 - `441` [.spec/plans/harness-doctor-phase1.md](plans/harness-doctor-phase1.md) — Phase 1 doctor and telemetry plan (slices 10.1, 10.2)
+- `442` [.spec/plans/harness-doctor-phase2.md](plans/harness-doctor-phase2.md) — Phase 2 doctor plan (slices 10.3, 10.4, 10.5)
