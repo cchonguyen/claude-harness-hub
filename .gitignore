@@ -2,7 +2,6 @@
 .spec/.strike-counter.json
 .spec/.session-telemetry.json
 .spec/.learn-staging.txt
-.spec/HANDOFF_PACKET.md
 .spec/DEBUG_PACKET.md
 .spec/BRIEFING_PACKET.md
 .spec/STATUS_BATCH.jsonl
@@ -23,3 +22,5 @@ dist/
 
 # harness-probe plugin marker files
 .harness-probe/
+.spec/STATE.json
+.spec/STATE.json.tmp

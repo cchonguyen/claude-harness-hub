@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="command-token" content="__COMMAND_TOKEN__">
+<title>Vibe Command Center</title>
+<style>
+  :root { --bg:#f6f7f9; --panel:#fff; --text:#1d2330; --muted:#5b6475; --line:#d9dde5; --amber:#b26a00; --amber-bg:#fff4dc; --green:#1f7a3d; --red:#b42318; --blue:#2453a6; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#14171c; --panel:#1d2128; --text:#e7eaf0; --muted:#9aa3b2; --line:#2f3640; --amber:#f2b04a; --amber-bg:#3a2d12; --green:#5fd38a; --red:#ff8a80; --blue:#8ab4ff; } }
+  :root[data-theme="dark"] { --bg:#14171c; --panel:#1d2128; --text:#e7eaf0; --muted:#9aa3b2; --line:#2f3640; --amber:#f2b04a; --amber-bg:#3a2d12; --green:#5fd38a; --red:#ff8a80; --blue:#8ab4ff; }
+  body { margin:0; background:var(--bg); color:var(--text); font:14px/1.4 system-ui, -apple-system, sans-serif; }
+  header { padding:12px 16px; border-bottom:1px solid var(--line); background:var(--panel); }
+  h1 { font-size:16px; margin:0 0 8px; }
+  .strip { display:flex; flex-wrap:wrap; gap:8px; font-size:12px; color:var(--muted); }
+  .pill { border:1px solid var(--line); border-radius:999px; padding:2px 8px; }
+  main { display:grid; grid-template-columns:repeat(6, minmax(180px, 1fr)); gap:10px; padding:12px 16px; overflow-x:auto; }
+  .col h2 { font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); margin:4px 0 8px; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:10px; margin-bottom:8px; }
+  .card.stale { border-color:var(--amber); }
+  .row { display:flex; justify-content:space-between; gap:6px; align-items:center; flex-wrap:wrap; }
+  .title { font-weight:600; word-break:break-word; }
+  .muted { color:var(--muted); font-size:12px; word-break:break-word; }
+  .badge { font-size:11px; border-radius:4px; padding:2px 6px; background:var(--line); }
+  .badge.evidence { background:var(--amber-bg); color:var(--amber); font-weight:600; }
+  .badge.stale { background:var(--amber-bg); color:var(--amber); }
+  .herdr-Working { color:var(--green); } .herdr-Blocked { color:var(--red); } .herdr-Idle { color:var(--blue); } .herdr-Offline { color:var(--muted); }
+  button { font:inherit; font-size:12px; border:1px solid var(--line); background:var(--panel); color:var(--text); border-radius:6px; padding:4px 8px; cursor:pointer; margin-top:6px; }
+  button.primary { background:var(--blue); color:#fff; border-color:var(--blue); }
+  button:disabled { opacity:.5; cursor:default; }
+  #msg { padding:0 16px; font-size:12px; color:var(--muted); min-height:18px; }
+  @media (max-width: 900px) { main { grid-template-columns:repeat(6, 200px); } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Vibe Coding Command Center</h1>
+  <div class="strip" id="strip">Connecting...</div>
+</header>
+<div id="msg"></div>
+<main id="board"></main>
+<script>
+(function () {
+  "use strict";
+  var TOKEN = document.querySelector('meta[name="command-token"]').content;
+  var STAGES = ["Design", "Falcon-Review", "Implementation", "Claimed", "Verified", "Accepted"];
+  var board = document.getElementById("board");
+  var strip = document.getElementById("strip");
+  var msg = document.getElementById("msg");
+
+  function el(tag, cls, text) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text !== undefined && text !== null) n.textContent = String(text);
+    return n;
+  }
+
+  function api(path, opts) {
+    opts = opts || {};
+    var headers = { "X-Command-Token": TOKEN };
+    if (opts.body) headers["Content-Type"] = "application/json";
+    return fetch(path, { method: opts.method || "GET", headers: headers, body: opts.body ? JSON.stringify(opts.body) : undefined })
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, status: r.status, body: j }; }); });
+  }
+
+  function renderStrip(snap) {
+    strip.textContent = "";
+    var counts = { Working: 0, Blocked: 0, Idle: 0, Offline: 0 };
+    var pending = 0, stale = 0;
+    snap.cards.forEach(function (c) { counts[c.herdr] = (counts[c.herdr] || 0) + 1; pending += c.pendingDecisions; if (c.stale) stale++; });
+    [["Working", counts.Working], ["Blocked", counts.Blocked], ["Idle", counts.Idle], ["Offline", counts.Offline]].forEach(function (p) {
+      strip.appendChild(el("span", "pill herdr-" + p[0], "Herdr " + p[0] + ": " + p[1]));
+    });
+    strip.appendChild(el("span", "pill", "Pending decisions: " + pending));
+    strip.appendChild(el("span", "pill", "Stale: " + stale));
+    strip.appendChild(el("span", "pill", "Updated " + new Date(snap.generatedAt).toLocaleTimeString()));
+  }
+
+  function card(c) {
+    var box = el("div", "card" + (c.stale ? " stale" : ""));
+    var top = el("div", "row");
+    top.appendChild(el("span", "muted", c.repo));
+    top.appendChild(el("span", "badge", c.rawStage || "unknown"));
+    box.appendChild(top);
+    box.appendChild(el("div", "title", c.sliceId ? (c.sliceId + ": " + (c.sliceTitle || "")) : (c.currentIntent || c.worktreeId)));
+    if (c.activeSlice) box.appendChild(el("div", "muted", "slice " + c.activeSlice.id + (c.activeSlice.title ? ": " + c.activeSlice.title : "")));
+    box.appendChild(el("div", "muted", "branch: " + (c.branch || "?") + " · HEAD " + (c.currentHeadSha || "?")));
+    var flags = el("div", "row");
+    flags.appendChild(el("span", "herdr-" + c.herdr, "Herdr: " + c.herdr));
+    flags.appendChild(el("span", "muted", "decisions: " + c.pendingDecisions));
+    box.appendChild(flags);
+    if (c.badge) box.appendChild(el("div", "badge evidence", c.badge));
+    if (c.staleLabel) box.appendChild(el("div", "badge stale", c.staleLabel));
+    if (c.canAccept) {
+      var b = el("button", "primary", "Accept Verified Slice");
+      b.addEventListener("click", function () { accept(c.worktree, b); });
+      box.appendChild(b);
+    }
+    if (c.herdrAgentId) {
+      var f = el("button", "", "Focus pane");
+      f.addEventListener("click", function () { focusAgent(c.worktreeId, c.herdrAgentId); });
+      box.appendChild(f);
+    }
+    return box;
+  }
+
+  function render(snap) {
+    renderStrip(snap);
+    board.textContent = "";
+    STAGES.forEach(function (stage) {
+      var col = el("section", "col");
+      col.appendChild(el("h2", "", stage));
+      snap.cards.filter(function (c) { return c.stage === stage; }).forEach(function (c) { col.appendChild(card(c)); });
+      board.appendChild(col);
+    });
+  }
+
+  function accept(worktree, button) {
+    button.disabled = true;
+    api("/api/slice/accept", { method: "POST", body: { worktree: worktree } }).then(function (r) {
+      msg.textContent = r.ok ? "Slice accepted." : "Not accepted: " + ((r.body && r.body.error) || r.status);
+    }).catch(function () { msg.textContent = "Accept request failed."; });
+  }
+
+  function focusAgent(worktreeId, paneId) {
+    api("/api/herdr/focus", { method: "POST", body: { action: "focus", worktreeId: worktreeId, paneId: paneId } }).then(function (r) {
+      msg.textContent = r.ok ? "Focused pane." : "Focus failed: " + ((r.body && r.body.error) || r.status);
+    });
+  }
+
+  // Live updates over fetch streaming (EventSource cannot send the token header).
+  function connect() {
+    fetch("/api/events", { headers: { "X-Command-Token": TOKEN } }).then(function (res) {
+      if (!res.ok) { strip.textContent = "Rejected (" + res.status + ")"; return; }
+      var reader = res.body.getReader();
+      var decoder = new TextDecoder();
+      var buf = "";
+      function pump() {
+        return reader.read().then(function (chunk) {
+          if (chunk.done) { setTimeout(connect, 3000); return; }
+          buf += decoder.decode(chunk.value, { stream: true });
+          var parts = buf.split("\n\n");
+          buf = parts.pop();
+          parts.forEach(function (block) {
+            var data = block.split("\n").filter(function (l) { return l.indexOf("data: ") === 0; }).map(function (l) { return l.slice(6); }).join("\n");
+            if (data) { try { render(JSON.parse(data)); } catch (e) { /* ignore bad frame */ } }
+          });
+          return pump();
+        });
+      }
+      return pump();
+    }).catch(function () { setTimeout(connect, 3000); });
+  }
+
+  connect();
+})();
+</script>
+</body>
+</html>

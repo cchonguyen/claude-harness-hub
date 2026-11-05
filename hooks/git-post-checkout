@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# hooks/git-post-checkout
+# Git post-checkout hook for claude-harness-hub and vibe-command-center
+#
+# Automatically updates .spec/STATE.json with the current branch name and
+# worktree directory whenever git switches branches or creates a worktree.
+# Prevents branch-checkout time travel and split-brain state drift.
+# ==============================================================================
+
+PREV_HEAD="$1"
+NEW_HEAD="$2"
+BRANCH_CHECKOUT="$3"
+
+# Exit immediately if not a branch checkout (e.g. file checkout)
+if [[ "$BRANCH_CHECKOUT" -ne 1 ]]; then
+  exit 0
+fi
+
+TOP_LEVEL="$(git rev-parse --show-toplevel 2>/dev/null || exit 0)"
+STATE_FILE="${TOP_LEVEL}/.spec/STATE.json"
+
+# Only run if repository is instrumented with .spec/STATE.json
+if [[ -f "$STATE_FILE" ]]; then
+  SCRIPT_DIR="$(git rev-parse --git-dir)/../bin"
+  if [[ -f "${SCRIPT_DIR}/update-state.mjs" ]]; then
+    node "${SCRIPT_DIR}/update-state.mjs" > /dev/null 2>&1 || true
+  else
+    # Fallback to direct json edit if node script is in standard location
+    BRANCH_NAME="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "HEAD")"
+    TIMESTAMP="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+    if command -v jq >/dev/null 2>&1; then
+      TMP_FILE="${STATE_FILE}.tmp"
+      jq --arg b "$BRANCH_NAME" --arg t "$TIMESTAMP" '.branch = $b | .updatedAt = $t' "$STATE_FILE" > "$TMP_FILE" && mv "$TMP_FILE" "$STATE_FILE" 2>/dev/null || true
+    fi
+  fi
+fi
+
+exit 0

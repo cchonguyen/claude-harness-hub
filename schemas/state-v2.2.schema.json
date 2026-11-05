@@ -1,0 +1,222 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RepoStateContractV2_2",
+  "description": "Standardized ephemeral state contract for claude-harness-hub and vibe-command-center",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "updatedAt",
+    "projectId",
+    "worktreeId",
+    "branch",
+    "currentIntent",
+    "stage",
+    "pendingDecisions",
+    "recentDecisions"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "enum": [
+        "2.2"
+      ],
+      "description": "Schema version identifier"
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO-8601 timestamp of last state update for staleness detection"
+    },
+    "projectId": {
+      "type": "string",
+      "description": "Identifier of the root repository (e.g., music-visualizer)"
+    },
+    "worktreeId": {
+      "type": "string",
+      "description": "Identifier of the specific working tree directory"
+    },
+    "branch": {
+      "type": "string",
+      "description": "Active git branch name"
+    },
+    "currentIntent": {
+      "type": "string",
+      "description": "High-level goal or milestone currently being executed"
+    },
+    "stage": {
+      "type": "string",
+      "enum": [
+        "Design",
+        "Falcon-Review",
+        "Implementation",
+        "Claimed",
+        "Verified",
+        "Accepted"
+      ],
+      "description": "Unified epistemic progression. 'Verified' requires automated test runner pass; 'Accepted' requires explicit human confirmation."
+    },
+    "activeSlices": {
+      "type": "array",
+      "description": "All active slices in this worktree. The dashboard shows one card per entry.",
+      "items": {
+        "type": "object",
+        "required": ["id", "title"],
+        "properties": {
+          "id": { "type": "string" },
+          "title": { "type": "string" },
+          "stage": { "type": "string", "enum": ["Design", "Falcon-Review", "Implementation", "Claimed", "Verified", "Accepted"] },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        }
+      }
+    },
+    "activeSlice": {
+      "type": "object",
+      "description": "Active feature slice. Optional during Design; required from Falcon-Review onward.",
+      "required": [
+        "id",
+        "title"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Slice identifier (e.g., slice-14)"
+        },
+        "title": {
+          "type": "string",
+          "description": "Short human-readable title of the active slice"
+        }
+      }
+    },
+    "pendingDecisions": {
+      "type": "array",
+      "description": "Unresolved human architectural or product decisions",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "prompt",
+          "contextFile",
+          "createdAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "prompt": {
+            "type": "string"
+          },
+          "contextFile": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      }
+    },
+    "verification": {
+      "type": "object",
+      "description": "Deterministic test verification evidence recorded exclusively by verify-slice.sh",
+      "required": [
+        "testsPassing",
+        "exitCode",
+        "testCommandRun",
+        "evidenceCommitSha",
+        "verifiedAt"
+      ],
+      "properties": {
+        "testsPassing": {
+          "type": "boolean"
+        },
+        "exitCode": {
+          "type": "integer"
+        },
+        "testCommandRun": {
+          "type": "string"
+        },
+        "evidenceCommitSha": {
+          "type": "string"
+        },
+        "verifiedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "evidenceSummary": {
+          "type": "string"
+        }
+      }
+    },
+    "recentDecisions": {
+      "type": "array",
+      "description": "Mandatory decision log populated during /wrap",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "timestamp",
+          "tradeoff",
+          "decision",
+          "contextFile"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "tradeoff": {
+            "type": "string"
+          },
+          "decision": {
+            "type": "string"
+          },
+          "contextFile": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "stage": {
+            "enum": [
+              "Falcon-Review",
+              "Implementation",
+              "Claimed",
+              "Verified",
+              "Accepted"
+            ]
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "activeSlice"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "stage": {
+            "enum": [
+              "Verified",
+              "Accepted"
+            ]
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "verification"
+        ]
+      }
+    }
+  ]
+}
