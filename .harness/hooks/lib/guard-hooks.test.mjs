@@ -247,8 +247,12 @@ test('main-thread Bash outside the allow-list is refused; the same command from 
   });
   const command = 'npm install left-pad';
   const main = run({ tool_name: 'Bash', tool_input: { command } });
-  assert.equal(main.status, 2);
-  assert.match(main.stderr, /Main thread Bash is limited to the allow-list/);
+  assert.equal(main.status, 0, main.stderr);
+  assert.match(main.stderr, /WARN:/);
+  const eventsDir = path.join(dir, '.spec', '.events');
+  const mainEvents = fs.readdirSync(eventsDir).flatMap((f) => fs.readFileSync(path.join(eventsDir, f), 'utf8')
+    .split('\n').filter(Boolean).map((l) => JSON.parse(l)));
+  assert.ok(mainEvents.some((e) => e.kind === 'main_thread_warn'));
   const sub = run({ agent_type: 'gf-coder', tool_name: 'Bash', tool_input: { command } });
   assert.equal(sub.status, 0);
 });
@@ -256,8 +260,11 @@ test('main-thread Bash outside the allow-list is refused; the same command from 
 test('main-thread Edit outside .spec is refused; the same edit from a subagent is not', () => {
   const dir = makeRepo({ files: { 'src/app.js': 'a\n' } });
   const main = runHook(GUARD, dir, edit(dir, 'src/app.js'));
-  assert.equal(main.status, 2);
-  assert.match(main.stderr, /Main thread may edit only \.spec\//);
+  assert.equal(main.status, 0, main.stderr);
+  assert.match(main.stderr, /WARN:/);
+  const mainEvents = fs.readFileSync(path.join(dir, '.spec', '.events', 's1.jsonl'), 'utf8')
+    .split('\n').filter(Boolean).map((l) => JSON.parse(l));
+  assert.ok(mainEvents.some((e) => e.kind === 'main_thread_warn'));
   const sub = runHook(GUARD, dir, { ...edit(dir, 'src/app.js'), agent_type: 'gf-coder' });
   assert.equal(sub.status, 0);
 });
