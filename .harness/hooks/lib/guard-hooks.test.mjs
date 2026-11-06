@@ -56,11 +56,13 @@ const edit = (dir, rel, extra = {}) => ({
   session_id: 's1', tool_name: 'Edit', tool_input: { file_path: path.join(dir, rel), old_string: 'a', new_string: 'b', ...extra },
 });
 
-test('manager mode with no active slice blocks source edits (PLAN LOCK)', () => {
+test('manager mode with no active slice warns but allows source edits (PLAN LOCK WARN)', () => {
   const dir = makeRepo({ files: { '.spec/harness.json': '{"workMode":"manager"}\n', '.spec/PROGRESS.md': '# Progress\n', 'src/app.js': 'a\n' } });
   const r = runHook(GUARD, dir, { ...edit(dir, 'src/app.js'), agent_type: 'gf-coder' });
-  assert.equal(r.status, 2);
-  assert.match(r.stderr, /PLAN LOCK/);
+  assert.equal(r.status, 0);
+  assert.match(r.stderr, /WARN: PLAN LOCK/);
+  const events = fs.readFileSync(path.join(dir, '.spec', '.events', 's1.jsonl'), 'utf8');
+  assert.match(events, /"kind":"plan_lock_warn"/);
 });
 
 test('a new active slice resets the coordinator edit budget (regression: slice name was never read)', () => {
