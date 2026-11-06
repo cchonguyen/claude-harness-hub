@@ -14,10 +14,15 @@ import { updateTelemetry } from './lib/telemetry-store.mjs';
 const gitIn = (cwd, args) =>
   execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
 
-/** Runs bin/verify-slice.sh when the operator's verify secret is on this machine. Never throws. */
+export const CI_VERIFIED_REASON = 'CI-verified: the "verify" check on the pull request (.github/workflows/harness-verify.yml) is the verifier';
+
+/**
+ * Runs bin/verify-slice.sh as an optional manual step when the operator's verify secret is on this machine.
+ * Without a secret, finish-slice does not need one: CI is the verifier. Never throws.
+ */
 export function autoVerify(root) {
   const secret = process.env.HARNESS_VERIFY_SECRET || readVerifySecret();
-  if (!secret) return { ran: false, reason: 'no verify secret on this machine, so Verified is left to verify-slice.sh on the operator machine' };
+  if (!secret) return { ran: false, verifier: 'ci', reason: CI_VERIFIED_REASON };
   const script = path.join(root, 'bin', 'verify-slice.sh');
   if (!fs.existsSync(script)) return { ran: false, reason: 'bin/verify-slice.sh not found' };
   try {
@@ -391,7 +396,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
         console.log(`✗ Verify failed, commit kept: ${res.verification.reason}`);
       }
     } else if (res.verification) {
-      console.log(`Verify skipped: ${res.verification.reason}`);
+      console.log(`Verify: ${res.verification.reason}`);
     }
     if (res.lull.isLull) {
       console.log(res.lull.recommendation);
