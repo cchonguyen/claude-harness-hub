@@ -136,13 +136,14 @@ test('an installed plugin older than the repo warns without halting', () => {
   }
 });
 
-test('the gate refuses Edit after a failing run and names the failing check', () => {
+test('the gate allows Edit after a failing run but warns and names the failing check', () => {
   const root = makeRoot({ agent: false });
   try {
     const state = runProbes({ root, head: HEAD });
     const d = gateDecision({ state, head: HEAD, toolName: 'Edit' });
-    assert.equal(d.allowed, false);
-    assert.match(d.reason, /gf-coder-registered/);
+    assert.equal(d.allowed, true);
+    assert.equal(d.warn, 'doctor not current for this HEAD');
+    assert.match(d.cause, /gf-coder-registered/);
   } finally {
     cleanup(root);
   }

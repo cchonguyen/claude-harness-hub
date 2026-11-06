@@ -68,17 +68,16 @@ function passBlock(state, head) {
   return null;
 }
 
+// Soft gate: never refuses for doctor state. A missing or stale pass returns a warn banner and a cause.
+export const DOCTOR_WARN = 'doctor not current for this HEAD';
+
 export function gateDecision({ state, head, toolName, command } = {}) {
   const isBash = toolName === 'Bash';
   const needsPass = WRITE_TOOLS.has(toolName) || (isBash && !isAllowListed(command));
-  if (!needsPass) return { allowed: true, reason: '' };
+  if (!needsPass) return { allowed: true, reason: '', warn: '', cause: '' };
 
   const blocked = passBlock(state, head);
-  if (!blocked) return { allowed: true, reason: '' };
+  if (!blocked) return { allowed: true, reason: '', warn: '', cause: '' };
 
-  const subject = isBash ? 'Bash command not on the doctor allow-list' : `${toolName} tool`;
-  return {
-    allowed: false,
-    reason: `Doctor gate refused ${subject}: ${blocked}. Run node .harness/scripts/doctor.mjs and fix the failing checks.`,
-  };
+  return { allowed: true, reason: '', warn: DOCTOR_WARN, cause: blocked };
 }

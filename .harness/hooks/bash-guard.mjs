@@ -8,6 +8,7 @@ import { currentHead, ensureDoctorState } from '../scripts/doctor.mjs';
 import { gateDecision } from './lib/doctor-state.mjs';
 import { mainThreadDecision } from './lib/main-thread-guard.mjs';
 import { hardBlockReason } from './lib/hard-blocks.mjs';
+import { appendEvent } from '../scripts/lib/event-log.mjs';
 
 const gitIn = (cwd, args) =>
   execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] }).trim();
@@ -42,6 +43,10 @@ const gate = gateDecision({
 if (!gate.allowed) {
   console.error(gate.reason);
   process.exit(2);
+}
+if (gate.warn) {
+  console.error(`WARN: ${gate.warn} (${gate.cause})`);
+  appendEvent(doctorRoot, { session: event.session_id, kind: 'doctor_stale', source: 'bash-guard', detail: { warn: gate.warn, cause: gate.cause } });
 }
 
 // Main-thread allow-list: subagents (agent_type set) are not restricted here
