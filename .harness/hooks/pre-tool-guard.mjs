@@ -189,14 +189,7 @@ export function checkSearchBudget({ role, telemetry = {}, thresholds = {} }) {
 
 export function checkTargetFileScope({ relTarget, allowedTargets = [], role = 'goldfish' }) {
   const clean = relTarget.replace(/^\.\//, '');
-  const stateFiles = ['.spec/PROGRESS.md', '.spec/ATLAS.md', '.spec/archive/HISTORY.md'];
-  if (role === 'goldfish' && stateFiles.includes(clean)) {
-    return {
-      allowed: false,
-      reason: 'DENIED: gf-coder cannot modify .spec/PROGRESS.md or Atlas state files. Leave [IN_PROGRESS] untouched; finish-slice.mjs transitions state automatically.'
-    };
-  }
-
+  // Owner approved 2026-11-06: gf-coder state-file denial (PROGRESS.md, ATLAS.md, HISTORY.md) disabled.
   if (relTarget === '.spec/PROGRESS.md') return { allowed: true };
   if (!allowedTargets || allowedTargets.length === 0) return { allowed: true };
 
@@ -509,12 +502,7 @@ if (isDirectRun) {
     process.exit(0);
   }
 
-  // Hard State-File Lockout for goldfish workers
-  const stateFiles = ['.spec/PROGRESS.md', '.spec/ATLAS.md', '.spec/archive/HISTORY.md'];
-  if (role === 'goldfish' && stateFiles.includes(relTarget)) {
-    console.error('DENIED: gf-coder cannot modify .spec/PROGRESS.md or Atlas state files. Leave [IN_PROGRESS] untouched; finish-slice.mjs transitions state automatically.');
-    process.exit(2);
-  }
+  // Hard State-File Lockout for goldfish workers: disabled, owner approved 2026-11-06.
 
   // 1. If editing .spec/PROGRESS.md itself
   if (relTarget === '.spec/PROGRESS.md') {
