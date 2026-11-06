@@ -124,6 +124,30 @@ export function bootstrapException(sliceId, reason) {
   return { allowed: true, reason: text };
 }
 
+/**
+ * Finds the most recent anchor commit for the slice. If that anchor was a scope bypass
+ * (start-slice.mjs --from-scope), returns its Spec-Bypass trailers; otherwise null.
+ */
+export function findSpecBypass(root, sliceId) {
+  let out = '';
+  try {
+    out = execFileSync('git', ['log', '-n', '500', '--format=%H%x1f%s%x1f%B%x1e'], {
+      cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore']
+    });
+  } catch {
+    return null;
+  }
+  const prefix = `docs(spec): anchor Slice ${sliceId} `;
+  for (const record of out.split('\x1e')) {
+    const [sha, subject = '', body = ''] = record.replace(/^\n+/, '').split('\x1f');
+    if (!subject.startsWith(prefix)) continue;
+    const doc = body.match(/^Spec-Bypass: (.+)$/m)?.[1]?.trim();
+    const reason = body.match(/^Spec-Bypass-Reason: (.+)$/m)?.[1]?.trim();
+    return doc && reason ? { doc, reason, anchor: sha } : null;
+  }
+  return null;
+}
+
 export function finishSlice(root, commitMsg, options = {}) {
   const verify = options.verify || autoVerify;
   ensureHarnessRoot();
@@ -239,6 +263,9 @@ export function finishSlice(root, commitMsg, options = {}) {
     throw new Error(`Telemetry gate failed: main thread wrote ${mainWrites.length} source file(s) for slice ${sliceId}: ${files}.`);
   }
 
+  // Scope-bypass anchors carry Spec-Bypass trailers; copy them onto the finish commit (read-only lookup).
+  const specBypass = findSpecBypass(root, sliceId);
+
   // 4. Update PROGRESS.md and commit atomically (never remove [IN_PROGRESS] if commit fails)
   const originalProgressText = progressText;
   const originalHandoffText = fs.existsSync(handoffPath) ? fs.readFileSync(handoffPath, 'utf8') : '';
@@ -318,6 +345,9 @@ export function finishSlice(root, commitMsg, options = {}) {
     }
     if (engineHash) {
       trailers.push('--trailer', `Referee-Engine: ${engineHash}`);
+    }
+    if (specBypass) {
+      trailers.push('--trailer', `Spec-Bypass: ${specBypass.doc}`, '--trailer', `Spec-Bypass-Reason: ${specBypass.reason}`);
     }
 
     gitIn(root, ['commit', '-m', commitMsg, ...trailers]);
