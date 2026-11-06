@@ -280,3 +280,20 @@ test('a stale doctor state warns and logs doctor_stale but never refuses the edi
   assert.ok(events.some((e) => e.kind === 'doctor_stale'));
   fs.rmSync(file, { force: true });
 });
+
+test('a coordinator edit over the fast-path budget warns, logs fast_path_warn and proceeds (exit 0)', () => {
+  const dir = makeRepo({
+    files: {
+      '.spec/harness.json': '{"workMode":"manager"}\n',
+      '.spec/PROGRESS.md': SLICE('src/app.js'),
+      'src/app.js': 'a\n',
+      '.spec/.session-telemetry.json': JSON.stringify({ sessionId: 's1', currentSlice: '3.3', coordinator_edits: 1 }),
+    },
+  });
+  const r = runHook(GUARD, dir, { ...edit(dir, 'src/app.js'), agent_type: 'coordinator' });
+  assert.equal(r.status, 0);
+  assert.match(r.stderr, /WARN: FAST-PATH BUDGET EXCEEDED/);
+  const events = fs.readFileSync(path.join(dir, '.spec', '.events', 's1.jsonl'), 'utf8')
+    .split('\n').filter(Boolean).map((l) => JSON.parse(l));
+  assert.ok(events.some((e) => e.kind === 'fast_path_warn' && e.source === 'pre-tool-guard'));
+});

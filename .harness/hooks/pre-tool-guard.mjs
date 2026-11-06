@@ -234,6 +234,18 @@ if (isDirectRun) {
   }
   const git = (args, env) => gitIn(root, args, env);
 
+  // Fast-path budget is soft: warn on stderr, log an event, and let the action proceed.
+  function warnFastPath(reason) {
+    console.error(`WARN: ${reason}`);
+    appendEvent(root, {
+      session: event.session_id,
+      kind: 'fast_path_warn',
+      source: 'pre-tool-guard',
+      slice: activeSliceName || null,
+      detail: { tool: event.tool_name, reason },
+    });
+  }
+
   function readTelemetry(repoRoot, currentSlice, sessionId = 'default') {
     const p = path.join(repoRoot, '.spec', '.session-telemetry.json');
     let data = {
@@ -445,10 +457,11 @@ if (isDirectRun) {
   // Searches (Grep / Glob / WebSearch) circuit breakers and fast-path budget
   if (['Grep', 'Glob', 'WebSearch'].includes(event.tool_name)) {
     const searchCheck = checkSearchBudget({ role, telemetry, thresholds });
-    if (!searchCheck.allowed) {
+    if (!searchCheck.allowed && role !== 'coordinator') {
       console.error(searchCheck.reason);
       process.exit(2);
     }
+    if (!searchCheck.allowed) warnFastPath(searchCheck.reason);
     if (role === 'goldfish') {
       telemetry.goldfish_searches = (telemetry.goldfish_searches || 0) + 1;
     } else if (role === 'coordinator') {
@@ -487,10 +500,7 @@ if (isDirectRun) {
   if (['Read', 'View'].includes(event.tool_name)) {
     if (role === 'coordinator') {
       const budgetCheck = checkFastPathBudget({ role, toolName: 'Read', targetFile: relTarget, telemetry, thresholds });
-      if (!budgetCheck.allowed) {
-        console.error(budgetCheck.reason);
-        process.exit(2);
-      }
+      if (!budgetCheck.allowed) warnFastPath(budgetCheck.reason);
       if (isSourceFile(relTarget)) {
         telemetry.coordinator_reads = (telemetry.coordinator_reads || 0) + 1;
         writeTelemetry(root, telemetry);
@@ -592,10 +602,7 @@ if (isDirectRun) {
       thresholds
     });
 
-    if (!editCheck.allowed) {
-      console.error(editCheck.reason);
-      process.exit(2);
-    }
+    if (!editCheck.allowed) warnFastPath(editCheck.reason);
 
     if (isSourceFile(relTarget)) {
       telemetry.coordinator_edits = (telemetry.coordinator_edits || 0) + 1;
