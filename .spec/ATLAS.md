@@ -26,10 +26,12 @@ The single entry point and registry for harness-hub specification artifacts. Def
 - `340` [.spec/contracts/review-relay.md](contracts/review-relay.md) — Structured review registry & PR scope gate
 
 ## Sector 400 System Spec
-- `400` [.spec/SYSTEM_SPEC.md](SYSTEM_SPEC.md) — System specification & contracts
+- `400` [.spec/SYSTEM_SPEC.md](SYSTEM_SPEC.md) — System specification & contracts (design intent)
+- `401` [.spec/HARNESS_SPEC.md](HARNESS_SPEC.md) — As-built harness specification (what runs today)
 - `410` [.spec/DECISIONS.md](DECISIONS.md) — Architecture Decision Records (ADRs)
 - `420` [.spec/OVERVIEW.md](OVERVIEW.md) — Project overview & test status
 - `430` [.spec/AI_STUDIO_RULES.md](AI_STUDIO_RULES.md) — AI Studio rules template
 - `440` [.spec/plans/README.md](plans/README.md) — Plan-merge approval format
 - `441` [.spec/plans/harness-doctor-phase1.md](plans/harness-doctor-phase1.md) — Phase 1 doctor and telemetry plan (slices 10.1, 10.2)
 - `442` [.spec/post-mortems/dispatch-telemetry-2026-11-06.md](post-mortems/dispatch-telemetry-2026-11-06.md) — Dispatch telemetry post-mortem and gate-off record (slice 10.8)
+- `443` [.spec/post-mortems/harness-council-review-2026-11-06.md](post-mortems/harness-council-review-2026-11-06.md) — Post-mortem and questions for external council review
