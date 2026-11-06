@@ -33,6 +33,7 @@ test('a clean run yields DOCTOR_PASS', () => {
     assert.equal(state.head, HEAD);
     assert.equal(typeof state.at, 'string');
     assert.equal(byName(state, 'fast-path-budget').ok, true);
+    assert.equal(byName(state, 'fast-path-budget').detail, 'coordinator source-read budget soft: warns and logs');
     assert.equal(byName(state, 'spoke-engine-hash').severity, 'skip');
   } finally {
     cleanup(root);
