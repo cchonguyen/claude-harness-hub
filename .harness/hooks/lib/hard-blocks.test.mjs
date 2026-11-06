@@ -26,6 +26,19 @@ test('branch delete with -D is blocked', () => {
   assert.equal(blocked('git branch -d old'), false);
 });
 
+test('hardBlockReason refuses force push and branch -D, and allows plain push and branch -d', () => {
+  for (const c of [
+    'git push -f origin x',
+    'git push --force',
+    'git push origin +main',
+    'git branch -D foo',
+  ]) assert.notEqual(hardBlockReason({ command: c, spoke: false }), '', c);
+  for (const c of [
+    'git push origin x',
+    'git branch -d foo',
+  ]) assert.equal(hardBlockReason({ command: c, spoke: false }), '', c);
+});
+
 test('deploy commands are blocked', () => {
   for (const c of [
     'npm run deploy',
