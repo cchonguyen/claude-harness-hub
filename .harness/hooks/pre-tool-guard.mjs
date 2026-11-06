@@ -389,13 +389,6 @@ if (isDirectRun) {
     });
   }
 
-  // Main-thread allow-list: subagents (agent_type set) are not restricted here
-  const mainThread = mainThreadDecision({ agentType: event.agent_type, toolName: event.tool_name, toolInput: event.tool_input, root });
-  if (!mainThread.allowed) {
-    console.error(mainThread.reason);
-    process.exit(2);
-  }
-
   const role = resolveRole(event);
   const thresholds = loadThresholds(root);
 
@@ -446,6 +439,19 @@ if (isDirectRun) {
   }
 
   let telemetry = readTelemetry(root, activeSliceName, event.session_id);
+
+  // Main-thread allow-list: subagents (agent_type set) are not restricted here. Soft: warn and log, then proceed.
+  const mainThread = mainThreadDecision({ agentType: event.agent_type, toolName: event.tool_name, toolInput: event.tool_input, root });
+  if (!mainThread.allowed) {
+    console.error(`WARN: ${mainThread.reason}`);
+    appendEvent(root, {
+      session: event.session_id,
+      kind: 'main_thread_warn',
+      source: 'pre-tool-guard',
+      slice: activeSliceName || null,
+      detail: { tool: event.tool_name, reason: mainThread.reason },
+    });
+  }
 
   // Searches (Grep / Glob / WebSearch) circuit breakers and fast-path budget
   if (['Grep', 'Glob', 'WebSearch'].includes(event.tool_name)) {
