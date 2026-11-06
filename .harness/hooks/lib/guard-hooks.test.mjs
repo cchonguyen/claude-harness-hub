@@ -261,3 +261,22 @@ test('main-thread Edit outside .spec is refused; the same edit from a subagent i
 });
 
 after(() => { for (const dir of dirs) fs.rmSync(dir, { recursive: true, force: true }); });
+
+test('a stale doctor state warns and logs doctor_stale but never refuses the edit', () => {
+  const dir = makeRepo({ files: { 'src/app.js': 'a\n' } });
+  const head = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: dir, encoding: 'utf8' }).trim();
+  const file = path.join(os.tmpdir(), `doctor-fail-${path.basename(dir)}-${Date.now()}.json`);
+  fs.writeFileSync(file, JSON.stringify({ status: 'DOCTOR_FAIL', head, failing: ['gf-coder-registered'] }));
+  const res = spawnSync(process.execPath, [GUARD], {
+    cwd: dir,
+    input: JSON.stringify({ ...edit(dir, 'src/app.js'), agent_type: 'gf-coder' }),
+    encoding: 'utf8',
+    env: { ...process.env, HARNESS_DOCTOR_STATE: file, CLAUDE_PROJECT_DIR: dir },
+  });
+  assert.equal(res.status, 0, res.stderr);
+  assert.match(res.stderr, /doctor not current for this HEAD/);
+  const events = fs.readFileSync(path.join(dir, '.spec', '.events', 's1.jsonl'), 'utf8')
+    .split('\n').filter(Boolean).map((l) => JSON.parse(l));
+  assert.ok(events.some((e) => e.kind === 'doctor_stale'));
+  fs.rmSync(file, { force: true });
+});

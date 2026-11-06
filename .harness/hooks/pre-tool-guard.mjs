@@ -14,6 +14,7 @@ import { clearUpshiftAuth, verifyUpshiftAuth } from '../scripts/evaluate-upshift
 import { normalizePayload } from './adapter.mjs';
 import { currentHead, ensureDoctorState } from '../scripts/doctor.mjs';
 import { gateDecision } from './lib/doctor-state.mjs';
+import { appendEvent } from '../scripts/lib/event-log.mjs';
 import { mainThreadDecision } from './lib/main-thread-guard.mjs';
 
 const gitIn = (cwd, args, env = {}) =>
@@ -372,6 +373,15 @@ if (isDirectRun) {
   if (!gate.allowed) {
     console.error(gate.reason);
     process.exit(2);
+  }
+  if (gate.warn) {
+    console.error(`WARN: ${gate.warn} (${gate.cause}). Run node .harness/scripts/doctor.mjs.`);
+    appendEvent(root, {
+      session: event.session_id,
+      kind: 'doctor_stale',
+      source: 'pre-tool-guard',
+      detail: { tool: event.tool_name, head: gateHead, cause: gate.cause },
+    });
   }
 
   // Main-thread allow-list: subagents (agent_type set) are not restricted here
