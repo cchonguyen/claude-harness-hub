@@ -200,10 +200,12 @@ test('circuit breaker enforces 2-search limit for goldfish workers', () => {
   assert.equal(checkSearchBudget({ role: 'goldfish', telemetry: { goldfish_searches: 0 }, thresholds }).allowed, true);
   assert.equal(checkSearchBudget({ role: 'goldfish', telemetry: { goldfish_searches: 1 }, thresholds }).allowed, true);
 
-  // 3rd search blocked
-  const blocked = checkSearchBudget({ role: 'goldfish', telemetry: { goldfish_searches: 2 }, thresholds });
-  assert.equal(blocked.allowed, false);
-  assert.match(blocked.reason, /CIRCUIT BREAKER: Goldfish search budget exceeded/);
+  // 3rd search flagged as a warning: checkSearchBudget reports the overrun, but the hook
+  // only warns on stderr and logs goldfish_breaker_warn (exit 0), and the counter still increments.
+  const warned = checkSearchBudget({ role: 'goldfish', telemetry: { goldfish_searches: 2 }, thresholds });
+  assert.equal(warned.allowed, false);
+  assert.equal(warned.count, 3);
+  assert.match(warned.reason, /CIRCUIT BREAKER: Goldfish search budget exceeded/);
 });
 
 test('goldfish target locks block editing files outside active slice Target files', () => {

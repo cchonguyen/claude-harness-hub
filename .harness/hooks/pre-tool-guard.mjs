@@ -457,10 +457,18 @@ if (isDirectRun) {
   if (['Grep', 'Glob', 'WebSearch'].includes(event.tool_name)) {
     const searchCheck = checkSearchBudget({ role, telemetry, thresholds });
     if (!searchCheck.allowed && role !== 'coordinator') {
-      console.error(searchCheck.reason);
-      process.exit(2);
+      // Goldfish breaker is soft: warn on stderr, log an event, and let the search proceed.
+      console.error(`WARN: ${searchCheck.reason}`);
+      appendEvent(root, {
+        session: event.session_id,
+        kind: 'goldfish_breaker_warn',
+        source: 'pre-tool-guard',
+        slice: activeSliceName || null,
+        detail: { tool: event.tool_name, reason: searchCheck.reason },
+      });
+    } else if (!searchCheck.allowed) {
+      warnFastPath(searchCheck.reason);
     }
-    if (!searchCheck.allowed) warnFastPath(searchCheck.reason);
     if (role === 'goldfish') {
       telemetry.goldfish_searches = (telemetry.goldfish_searches || 0) + 1;
     } else if (role === 'coordinator') {
