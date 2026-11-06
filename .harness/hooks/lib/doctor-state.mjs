@@ -1,6 +1,7 @@
 // Pure helpers for the live doctor gate (Slice 10.1). No probes run here.
 import fs from 'node:fs';
 import path from 'node:path';
+import { isHardBlockedSegment } from './hard-blocks.mjs';
 
 const DEFAULT_STATE_PATH = '/tmp/harness-session-state.json';
 const WRITE_TOOLS = new Set(['Edit', 'Write', 'NotebookEdit']);
@@ -16,12 +17,6 @@ const ALLOWED_SEGMENTS = [
   /^gh pr (view|list)(\s|$)/,
   /^(ls|cat|grep|rg)(\s|$)/,
   /^sed -n(\s|$)/,
-];
-
-// Force-push and branch deletion stay refused even though `git push` and `git branch` are allowed.
-const DESTRUCTIVE = [
-  /^git push\b.*(\s--force(-with-lease)?(\s|=|$)|\s-f(\s|$))/,
-  /^git branch\b.*\s-D(\s|$)/,
 ];
 
 export function statePath() {
@@ -55,7 +50,7 @@ export function isAllowListed(command) {
   const parts = cmd.split(/\|\||&&|[;&|]/).map((s) => s.trim()).filter(Boolean);
   if (!parts.length) return false;
   return parts.every((part) =>
-    ALLOWED_SEGMENTS.some((re) => re.test(part)) && !DESTRUCTIVE.some((re) => re.test(part)));
+    ALLOWED_SEGMENTS.some((re) => re.test(part)) && !isHardBlockedSegment(part));
 }
 
 const short = (h) => String(h || '').slice(0, 7) || 'unknown';
