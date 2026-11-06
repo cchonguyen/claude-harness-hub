@@ -245,36 +245,15 @@ export function finishSlice(root, commitMsg, options = {}) {
   let committed = false;
 
   try {
-    // Find next pending slice to promote (Single-Commit Auto-Advance)
-    let nextIdx = -1;
-    let nextSlice = null;
-    for (let i = activeIdx + 1; i < lines.length; i++) {
-      const p = parseSliceLine(lines[i]);
-      if (p.id && p.status === '[PENDING]') {
-        nextIdx = i;
-        nextSlice = p;
-        break;
-      }
-    }
-
     // Mark current slice [x]
     lines[activeIdx] = activeLine.replace(/\[IN_PROGRESS\]\s*/g, '').replace(/-\s*\[\s*\]/, '- [x]').trim();
 
-    // Auto-advance: promote next slice to [IN_PROGRESS] within the exact same file write & commit
-    if (nextIdx !== -1) {
-      const nextLine = lines[nextIdx];
-      if (/\[PENDING\]/i.test(nextLine)) {
-        lines[nextIdx] = nextLine.replace(/\[PENDING\]/i, '[IN_PROGRESS]');
-      } else {
-        lines[nextIdx] = nextLine.replace(/(\*\*[^*]+\*\*)/, '$1 [IN_PROGRESS]');
-      }
-    }
-
+    // Owner decision 2026-11-06: no auto-advance; the next slice is started explicitly.
     atomicWriteFileSync(progressPath, lines.join('\n'), 'utf8');
 
     // 5. Update SESSION_HANDOFF.md
-    const nextSliceId = nextSlice ? nextSlice.id : null;
-    const nextActiveStr = nextSliceId ? `Slice ${nextSliceId}` : 'none';
+    const nextSliceId = null;
+    const nextActiveStr = 'none';
     if (originalHandoffText) {
       const handoffText = originalHandoffText;
       const updatedHandoff = handoffText
