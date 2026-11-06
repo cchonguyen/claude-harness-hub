@@ -2,11 +2,11 @@
 
 Shared template for Claude Code, Google Antigravity, and Google AI Studio. Every platform overwrites this file with the same five fields, in this order, before it pushes.
 
-- **Last Active Platform:** Google Antigravity
-- **Active Branch / State:** `main` (Elephant Architectural Synthesis v4.0 complete: Slices 4.1 -> 4.4 verified).
-- **Files Modified in Last Turn:** `.harness/scripts/freeze-crime-scene.mjs`, `.harness/scripts/librarian.mjs`, `.harness/scripts/finish-slice.mjs`, `.harness/scripts/pr-scope-check.mjs`, `.harness/scripts/librarian.test.mjs`, `.spec/PROGRESS.md`
-- **Verification Status:** Verified via finish-slice.mjs (Slice 11.15)
-- **Immediate Next Step for Claude:** Run `/clear` then `/pickup`. All Dewey Class 000-400 files, thresholds manifest, universal hooks adapter, and subagents are synced and operational.
+- **Last Active Platform:** Claude Code (project thread "Audit harness and write council review")
+- **Active Branch / State:** `main` at c595c43 (PR #117). Streamlining slices 11.1 to 11.15 merged. No slice in progress.
+- **Files Modified in Last Turn:** `.spec/HARNESS_SPEC.md`, `.spec/post-mortems/harness-council-review-2026-11-06.md`, `.spec/ATLAS.md`, `.spec/SYSTEM_SPEC.md`, `.spec/SESSION_HANDOFF.md`
+- **Verification Status:** docs-only change; full test suite, typecheck and lint run before commit
+- **Immediate Next Step for Claude:** Read `.spec/HARNESS_SPEC.md` for how the harness runs today. Open work and recommendations are in `.spec/post-mortems/harness-council-review-2026-11-06.md`.
 - **Active Slice:** none
-- **Branch Owner:** antigravity
-- **Audit Status:** CLEAN
+- **Branch Owner:** claude
+- **Audit Status:** AUDIT_PENDING

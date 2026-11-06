@@ -1,5 +1,7 @@
 # System Specification & Contracts
 
+> **Read first:** this file records design contracts and their history. For what actually runs today (plugin 0.3.0, soft gates, hard blocks, host constraints), see [HARNESS_SPEC.md](HARNESS_SPEC.md). Its section 14 lists where the two disagree.
+
 ## 1. Core Scope & MVP Boundaries
 
 ### Scope Brief (triaged 2026-11-03: making the repo public)
