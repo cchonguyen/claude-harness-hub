@@ -5,9 +5,47 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { finishSlice, parseActiveTargets, bootstrapException, autoVerify, CI_VERIFIED_REASON } from './finish-slice.mjs';
-import { startSlice } from './start-slice.mjs';
+import { startSlice, startFromScope } from './start-slice.mjs';
 import { verifyHeadTrust } from './referee.mjs';
 import { appendCall, readCalls } from './lib/telemetry.mjs';
+
+// Repo with committed harness stubs, a scope doc under .spec/, and a PROGRESS.md holding `progressBody`.
+function makeScopeRepo(progressBody) {
+  const dir = makeRepo();
+  fs.mkdirSync(path.join(dir, '.spec'), { recursive: true });
+  fs.mkdirSync(path.join(dir, '.harness', 'scripts'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.harness', 'scripts', 'referee.mjs'), '// referee');
+  fs.writeFileSync(path.join(dir, '.spec', 'SESSION_HANDOFF.md'), '**Active Slice:** none\n**Verification Status:** pending\n');
+  fs.writeFileSync(path.join(dir, '.spec', 'scope.md'), '# Scope\n\n## Slice 4\nSettled in review.\n');
+  fs.writeFileSync(path.join(dir, '.spec', 'PROGRESS.md'), `# Progress\n${progressBody}`);
+  fs.writeFileSync(path.join(dir, 'test.txt'), 'content');
+  execFileSync('git', ['add', '-A'], { cwd: dir, stdio: 'ignore' });
+  execFileSync('git', ['commit', '-q', '-m', 'init'], { cwd: dir, stdio: 'ignore' });
+  return dir;
+}
+
+test('a scope-bypass anchor copies Spec-Bypass trailers onto the finish commit', () => {
+  const dir = makeScopeRepo('');
+  startFromScope(dir, { doc: '.spec/scope.md', slice: '4', targets: 'test.txt', reason: 'settled in review' });
+  fs.writeFileSync(path.join(dir, 'test.txt'), 'changed');
+  finishSlice(dir, 'feat: finish slice 4', { skipChecks: true, verify: () => ({ ran: false, reason: 'test' }) });
+
+  const body = execFileSync('git', ['log', '-1', '--format=%B'], { cwd: dir, encoding: 'utf8' });
+  assert.match(body, /^Spec-Bypass: \.spec\/scope\.md$/m);
+  assert.match(body, /^Spec-Bypass-Reason: settled in review$/m);
+  assert.match(body, /^Referee-Verdict: VERIFIED$/m);
+});
+
+test('a normal anchor produces no Spec-Bypass trailers on the finish commit', () => {
+  const dir = makeScopeRepo('- [ ] **Slice 5: Normal** Target files: test.txt\n');
+  startSlice(dir, '5');
+  fs.writeFileSync(path.join(dir, 'test.txt'), 'changed');
+  finishSlice(dir, 'feat: finish slice 5', { skipChecks: true, verify: () => ({ ran: false, reason: 'test' }) });
+
+  const body = execFileSync('git', ['log', '-1', '--format=%B'], { cwd: dir, encoding: 'utf8' });
+  assert.doesNotMatch(body, /Spec-Bypass/);
+  assert.match(body, /^Referee-Verdict: VERIFIED$/m);
+});
 
 test('bootstrap exception is allowed only for slices 10.2 and 5.1 with a stated reason', () => {
   assert.deepEqual(bootstrapException('10.2', 'telemetry hook not yet live'), {
@@ -210,7 +248,7 @@ test('finishSlice fails closed when slice exists only in working copy and not in
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test('finishSlice single-commit auto-advance promotes next pending slice to [IN_PROGRESS]', () => {
+test('finishSlice does not auto-advance: next slice stays [PENDING] and no slice is [IN_PROGRESS]', () => {
   const dir = makeRepo();
   const git = (...args) => execFileSync('git', args, { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
 
@@ -236,26 +274,27 @@ test('finishSlice single-commit auto-advance promotes next pending slice to [IN_
   fs.writeFileSync(path.join(dir, 'a.txt'), 'a updated');
   seedDispatch(dir);
 
-  const res = finishSlice(dir, 'feat: finish slice 1 with auto-advance', { skipChecks: true });
+  const res = finishSlice(dir, 'feat: finish slice 1 without auto-advance', { skipChecks: true });
   assert.equal(res.success, true);
   assert.equal(res.sliceId, '1');
-  assert.equal(res.nextSliceId, '2');
+  assert.equal(res.nextSliceId, null);
 
-  // Verify PROGRESS.md in working tree & HEAD
+  // Verify PROGRESS.md in working tree & HEAD: slice 1 done, nothing promoted
   const progressText = fs.readFileSync(path.join(dir, '.spec', 'PROGRESS.md'), 'utf8');
   assert.match(progressText, /- \[x\] \*\*Slice 1: First\*\*/);
-  assert.match(progressText, /- \[ \] \*\*Slice 2: Second\*\* \[IN_PROGRESS\]/);
+  assert.match(progressText, /- \[ \] \*\*Slice 2: Second\*\* \[PENDING\]/);
   assert.match(progressText, /- \[ \] \*\*Slice 3: Third\*\*/);
-  assert.doesNotMatch(progressText, /\*\*Slice 3: Third\*\* \[IN_PROGRESS\]/);
+  assert.doesNotMatch(progressText, /\[IN_PROGRESS\]/);
 
-  // Check HEAD commit has both changes
   const headProgress = git('show', 'HEAD:.spec/PROGRESS.md');
   assert.match(headProgress, /- \[x\] \*\*Slice 1: First\*\*/);
-  assert.match(headProgress, /- \[ \] \*\*Slice 2: Second\*\* \[IN_PROGRESS\]/);
+  assert.match(headProgress, /- \[ \] \*\*Slice 2: Second\*\* \[PENDING\]/);
+  assert.doesNotMatch(headProgress, /\[IN_PROGRESS\]/);
 
-  // Check SESSION_HANDOFF.md
+  // SESSION_HANDOFF.md must not name a next slice as active
   const handoffText = fs.readFileSync(path.join(dir, '.spec', 'SESSION_HANDOFF.md'), 'utf8');
-  assert.match(handoffText, /\*\*Active Slice:\*\* Slice 2/);
+  assert.match(handoffText, /\*\*Active Slice:\*\* none/);
+  assert.doesNotMatch(handoffText, /\*\*Active Slice:\*\* Slice 2/);
 
   fs.rmSync(dir, { recursive: true, force: true });
 });
