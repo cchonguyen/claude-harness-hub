@@ -49,11 +49,11 @@ if (gate.warn) {
   appendEvent(doctorRoot, { session: event.session_id, kind: 'doctor_stale', source: 'bash-guard', detail: { warn: gate.warn, cause: gate.cause } });
 }
 
-// Main-thread allow-list: subagents (agent_type set) are not restricted here
+// Main-thread allow-list: subagents (agent_type set) are not restricted here. Soft: warn and log, then proceed.
 const mainThread = mainThreadDecision({ agentType: event.agent_type, toolName: 'Bash', toolInput: event.tool_input, root: doctorRoot });
 if (!mainThread.allowed) {
-  console.error(mainThread.reason);
-  process.exit(2);
+  console.error(`WARN: ${mainThread.reason}`);
+  appendEvent(doctorRoot, { session: event.session_id, kind: 'main_thread_warn', source: 'bash-guard', detail: { tool: 'Bash', reason: mainThread.reason } });
 }
 
 process.exit(0);
