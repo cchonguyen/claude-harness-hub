@@ -7,6 +7,6 @@ Shared template for Claude Code, Google Antigravity, and Google AI Studio. Every
 - **Files Modified in Last Turn:** `.harness/scripts/freeze-crime-scene.mjs`, `.harness/scripts/librarian.mjs`, `.harness/scripts/finish-slice.mjs`, `.harness/scripts/pr-scope-check.mjs`, `.harness/scripts/librarian.test.mjs`, `.spec/PROGRESS.md`
 - **Verification Status:** Verified via finish-slice.mjs (Slice 10.7)
 - **Immediate Next Step for Claude:** Run `/clear` then `/pickup`. All Dewey Class 000-400 files, thresholds manifest, universal hooks adapter, and subagents are synced and operational.
-- **Active Slice:** Slice 10.5
+- **Active Slice:** none
 - **Branch Owner:** antigravity
 - **Audit Status:** CLEAN
