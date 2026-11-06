@@ -1,6 +1,9 @@
 # Harness ephemeral session state
 .spec/.strike-counter.json
 .spec/.session-telemetry.json
+.spec/.session-telemetry.json.bak
+.spec/.session-telemetry.lock
+.spec/.telemetry-errors.log
 .spec/.learn-staging.txt
 .spec/DEBUG_PACKET.md
 .spec/BRIEFING_PACKET.md
