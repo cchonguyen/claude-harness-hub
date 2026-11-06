@@ -210,7 +210,7 @@ test('finishSlice fails closed when slice exists only in working copy and not in
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test('finishSlice single-commit auto-advance promotes next pending slice to [IN_PROGRESS]', () => {
+test('finishSlice does not auto-advance: next slice stays [PENDING] and no slice is [IN_PROGRESS]', () => {
   const dir = makeRepo();
   const git = (...args) => execFileSync('git', args, { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
 
@@ -236,26 +236,27 @@ test('finishSlice single-commit auto-advance promotes next pending slice to [IN_
   fs.writeFileSync(path.join(dir, 'a.txt'), 'a updated');
   seedDispatch(dir);
 
-  const res = finishSlice(dir, 'feat: finish slice 1 with auto-advance', { skipChecks: true });
+  const res = finishSlice(dir, 'feat: finish slice 1 without auto-advance', { skipChecks: true });
   assert.equal(res.success, true);
   assert.equal(res.sliceId, '1');
-  assert.equal(res.nextSliceId, '2');
+  assert.equal(res.nextSliceId, null);
 
-  // Verify PROGRESS.md in working tree & HEAD
+  // Verify PROGRESS.md in working tree & HEAD: slice 1 done, nothing promoted
   const progressText = fs.readFileSync(path.join(dir, '.spec', 'PROGRESS.md'), 'utf8');
   assert.match(progressText, /- \[x\] \*\*Slice 1: First\*\*/);
-  assert.match(progressText, /- \[ \] \*\*Slice 2: Second\*\* \[IN_PROGRESS\]/);
+  assert.match(progressText, /- \[ \] \*\*Slice 2: Second\*\* \[PENDING\]/);
   assert.match(progressText, /- \[ \] \*\*Slice 3: Third\*\*/);
-  assert.doesNotMatch(progressText, /\*\*Slice 3: Third\*\* \[IN_PROGRESS\]/);
+  assert.doesNotMatch(progressText, /\[IN_PROGRESS\]/);
 
-  // Check HEAD commit has both changes
   const headProgress = git('show', 'HEAD:.spec/PROGRESS.md');
   assert.match(headProgress, /- \[x\] \*\*Slice 1: First\*\*/);
-  assert.match(headProgress, /- \[ \] \*\*Slice 2: Second\*\* \[IN_PROGRESS\]/);
+  assert.match(headProgress, /- \[ \] \*\*Slice 2: Second\*\* \[PENDING\]/);
+  assert.doesNotMatch(headProgress, /\[IN_PROGRESS\]/);
 
-  // Check SESSION_HANDOFF.md
+  // SESSION_HANDOFF.md must not name a next slice as active
   const handoffText = fs.readFileSync(path.join(dir, '.spec', 'SESSION_HANDOFF.md'), 'utf8');
-  assert.match(handoffText, /\*\*Active Slice:\*\* Slice 2/);
+  assert.match(handoffText, /\*\*Active Slice:\*\* none/);
+  assert.doesNotMatch(handoffText, /\*\*Active Slice:\*\* Slice 2/);
 
   fs.rmSync(dir, { recursive: true, force: true });
 });
