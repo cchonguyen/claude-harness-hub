@@ -306,3 +306,21 @@ test('a coordinator edit over the fast-path budget warns, logs fast_path_warn an
     .split('\n').filter(Boolean).map((l) => JSON.parse(l));
   assert.ok(events.some((e) => e.kind === 'fast_path_warn' && e.source === 'pre-tool-guard'));
 });
+
+test('bash-guard warn events carry the session_id and land in that session file', () => {
+  const dir = makeRepo({ files: { 'src/app.js': 'a\n' } });
+  const res = spawnSync(process.execPath, [BASH], {
+    cwd: dir,
+    input: JSON.stringify({ session_id: 'sess-bash-14', tool_name: 'Bash', tool_input: { command: 'npm install left-pad' } }),
+    encoding: 'utf8',
+    env: { ...process.env, ...doctorEnv(dir), CLAUDE_PROJECT_DIR: dir },
+  });
+  assert.equal(res.status, 0, res.stderr);
+  const file = path.join(dir, '.spec', '.events', 'sess-bash-14.jsonl');
+  assert.equal(fs.existsSync(file), true);
+  const events = fs.readFileSync(file, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l));
+  const warn = events.find((e) => e.kind === 'main_thread_warn');
+  assert.ok(warn, 'main_thread_warn event written');
+  assert.equal(warn.session, 'sess-bash-14');
+  assert.equal(warn.source, 'bash-guard');
+});
