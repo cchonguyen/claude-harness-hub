@@ -27,3 +27,4 @@ dist/
 .harness-probe/
 .spec/STATE.json
 .spec/STATE.json.tmp
+.spec/.events/
