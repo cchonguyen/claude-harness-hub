@@ -568,8 +568,15 @@ if (isDirectRun) {
   }
 
   if (modeOf(root) === 'locked') {
-    console.error('PLAN LOCK: No task is marked [IN_PROGRESS] in .spec/PROGRESS.md. Run /triage or /spec first.');
-    process.exit(2);
+    // Plan lock is a soft warn: log it on stderr and to the event log, then let the edit proceed.
+    console.error('WARN: PLAN LOCK: No task is marked [IN_PROGRESS] in .spec/PROGRESS.md. Run /triage or /spec first.');
+    appendEvent(root, {
+      session: event.session_id,
+      kind: 'plan_lock_warn',
+      source: 'pre-tool-guard',
+      slice: null,
+      detail: { tool: event.tool_name, target: relTarget },
+    });
   }
 
   // Fast-path budget check for Coordinator on Edits
