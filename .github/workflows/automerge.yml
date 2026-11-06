@@ -43,7 +43,10 @@ jobs:
         # while it is still running, which never ends.
         run: |
           for attempt in $(seq 1 90); do
-            checks=$(gh pr checks "$PR" --repo "$REPO" --json name,bucket 2>/dev/null || echo '[]')
+            # gh exits 8 while checks are pending and 1 on failures, but still prints the JSON.
+            # Keep the output whatever the exit code, and leave stderr visible.
+            checks=$(gh pr checks "$PR" --repo "$REPO" --json name,bucket || true)
+            [ -n "$checks" ] || checks='[]'
             others=$(echo "$checks" | jq '[.[] | select(.name != "automerge" and (.name | endswith(" / automerge") | not))]')
             if [ "$(echo "$others" | jq '[.[] | select(.bucket == "fail" or .bucket == "cancel")] | length')" -gt 0 ]; then
               echo "A check failed; not merging."
