@@ -20,6 +20,7 @@ These rules load into every thread. Repo `.claude/` hooks, agents and commands n
 - **Slice mode:** `.spec/PROGRESS.md` has exactly one `[IN_PROGRESS]` slice. Edit only its `Target files:`, plus `.spec/PROGRESS.md` and `.spec/SESSION_HANDOFF.md`.
 - **Two or more `[IN_PROGRESS]` slices:** stop and ask which one to finish.
 - **No slice:** a quick fix changes one file and at most 25 lines. Anything larger needs a slice first, written with `/spec`.
+- **music-visualizer (standing rule, Charlie):** every change is a slice with the harness slice gate, including one-file changes. Do not use the quick-fix path there.
 - If a slice's `Target files:` are missing or unclear, ask. Do not guess.
 
 ## Verification
@@ -37,6 +38,7 @@ Slice colour tags: `[UI / VISUAL]` needs typecheck only. `[CORE / DATA]` needs t
 1. Run the verification commands above.
 2. Run `node .harness/scripts/finish-slice.mjs "<commit message>"`. It marks the slice `[x]`, stamps the `Referee-Verdict` and `Referee-Tree` trailers, and commits. Never type those trailers by hand.
 3. Push and open the pull request (see below).
+- No bootstrap exceptions. Do not pass `--bootstrap` or claim one, and never hand-stamp a slice or its trailers (standing rule, Charlie).
 
 ## Git and pull requests
 - Branch from `main`. Name the branch `claude/<short-topic>`. Never push to `main` directly.
@@ -49,12 +51,16 @@ Slice colour tags: `[UI / VISUAL]` needs typecheck only. `[CORE / DATA]` needs t
 - The `Harness slice gate` check must pass. It needs a slice line in `.spec/PROGRESS.md` and a head commit with Referee trailers. A quick fix or a vibe-mode change will show red, by design.
 - Use the pull request template if the repo has one.
 - A plan file in `.spec/plans/` is the operator's approval for the slices it lists. Merging it accepts them (see `.spec/plans/README.md`). No per-slice accept step is needed.
+- Slice-sized work gets one pull request. Do not split same-file or same-actor work across pull requests (standing rule, Charlie).
 
 ## Web-first operation
 - Run scripts, tests and git yourself in the cloud container. Do not ask the operator to run them.
 - When the operator must act, write numbered steps for the Claude Code web app: the page, the button, the field, and the expected result after each step.
-- Only when the container truly cannot do a task, offer one self-contained terminal command as the last resort.
+- Charlie does not use a terminal. Never ask him to run commands or give him terminal commands. When he must act, give web-UI steps only.
 - Engine files (`.claude/`, `.harness/`, `.harness-version`) change in this hub repo only. Spokes get them by sync.
+
+## Threads
+- Send follow-up work to the thread that already owns it, with `message_thread`. Do not open a new thread for it.
 
 ## When blocked
 Finish everything that does not depend on the blocker first. Then end your reply with a `Needed from you:` block of numbered, concrete steps. Put nothing after it.
