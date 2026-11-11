@@ -1,8 +1,8 @@
 # Plan files
 
 A plan file in this folder is the operator's approval for the slices it lists.
-Merging the pull request that adds it accepts those slices automatically
-(the `accept-plan` workflow marks them `[x]` in `.spec/PROGRESS.md` on `main`).
+Merging the pull request that adds it records that approval. It does not change
+slice status in `.spec/PROGRESS.md`. A slice is done when its own pull request is merged.
 
 Format:
 
@@ -14,7 +14,9 @@ Format:
 
 - The first line names the plan. Each `- slice:` line names one slice in `.spec/PROGRESS.md`.
 - Other lines are ignored, so a short note is fine.
-- If a listed slice is not in `.spec/PROGRESS.md`, the workflow fails and nothing is accepted.
+- After a plan lands on `main`, the `accept-plan` workflow checks that every listed slice exists
+  in `.spec/PROGRESS.md` and writes the result to the job summary. It writes nothing else.
+  If a listed slice is missing, the job fails so it is visible.
 
 Plan acceptance does not use the dashboard Accepted stage or the verify key.
 Neither is involved, and no per-slice accept step is needed.
