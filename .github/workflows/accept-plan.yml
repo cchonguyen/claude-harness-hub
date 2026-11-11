@@ -4,15 +4,12 @@ on:
   push:
     branches: [main]
     paths: ['.spec/plans/*.md']
-  pull_request:
-    types: [closed]
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   accept:
-    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -23,69 +20,17 @@ jobs:
         with:
           node-version: 22
 
-      - name: Accept slices listed in changed plan files
+      - name: Validate slices listed in changed plan files
         run: |
           files=$(git diff --name-only --diff-filter=AM "${{ github.event.before }}" "${{ github.sha }}" -- '.spec/plans/*.md' | grep -v README.md || true)
           if [ -z "$files" ]; then
-            echo "No plan files added or changed by this push."
+            echo "No plan files added or changed by this push." | tee -a "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
           status=0
           while IFS= read -r f; do
             [ -z "$f" ] && continue
-            echo "Accepting slices from $f"
-            node .harness/scripts/accept-plan.mjs "$f" || status=1
+            echo "### $f" >> "$GITHUB_STEP_SUMMARY"
+            node .harness/scripts/accept-plan.mjs --check "$f" >> "$GITHUB_STEP_SUMMARY" || status=1
           done <<< "$files"
           exit $status
-
-      - name: Commit updated PROGRESS.md
-        run: |
-          if git diff --quiet -- .spec/PROGRESS.md; then
-            echo "PROGRESS.md unchanged."
-            exit 0
-          fi
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add .spec/PROGRESS.md
-          git commit -m "chore(spec): accept slices from merged plan"
-          git push origin HEAD:main
-
-  reconcile:
-    if: github.event_name == 'pull_request' && github.event.pull_request.merged == true
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      pull-requests: read
-    concurrency:
-      group: progress-reconcile
-      cancel-in-progress: false
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: main
-          fetch-depth: 0
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
-      - name: Reconcile merged PR against PROGRESS.md
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR: ${{ github.event.pull_request.number }}
-          LOGIN: ${{ github.event.pull_request.merged_by.login }}
-        run: |
-          mapfile -t files < <(gh api --paginate "repos/${{ github.repository }}/pulls/${PR}/files" --jq '.[].filename')
-          node .harness/scripts/accept-plan.mjs --merged "$PR" "$LOGIN" "${files[@]}"
-
-      - name: Commit updated PROGRESS.md
-        run: |
-          if git diff --quiet -- .spec/PROGRESS.md; then
-            echo "PROGRESS.md unchanged."
-            exit 0
-          fi
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add .spec/PROGRESS.md
-          git commit -m "chore(spec): accept slices from merged plan"
-          git push origin HEAD:main
