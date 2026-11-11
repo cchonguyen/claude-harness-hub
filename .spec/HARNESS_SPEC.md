@@ -101,7 +101,7 @@ The hooks are two layers on purpose: the plugin is a thin router, and each repo 
 | Hook script | Event | Does | Enforcement today |
 |---|---|---|---|
 | `session-start.mjs` | SessionStart | Creates `.spec/.session-telemetry.json` if missing; Vibe baseline snapshot; runs Doctor probes and writes `/tmp/harness-session-state.json`; checks `harness-main-red` tag; injects branch owner and "Where we left off" from `SESSION_HANDOFF.md`; plugin-version mismatch banner; appends `heartbeat` event | Advisory. The first banner line is fixed text: "Model tier: Haiku baseline" is printed whatever model runs (`session-start.mjs` line 42) |
-| `pre-tool-guard.mjs` | PreToolUse (non-Bash) | Role detection from `agent_type`; fast-path budget; goldfish search breaker; doctor gate; main-thread allow-list; plan lock; work lock; colour lock; engine lock; target-file scope lock; upshift lock | Mixed, see section 5 |
+| `pre-tool-guard.mjs` | PreToolUse (non-Bash) | Role detection from `agent_type`; fast-path budget; goldfish search breaker; doctor gate; main-thread allow-list; plan lock; work lock; engine lock; target-file scope lock (warning) | Mixed, see section 5 |
 | `bash-guard.mjs` | PreToolUse (Bash) | Hard blocks (`lib/hard-blocks.mjs`) first, then doctor gate and main-thread allow-list as warnings | Hard blocks exit 2; rest warn |
 | `post-tool-scrub.mjs` | PostToolUse (Bash) | Scrubs noisy test output, advances Vibe green checkpoint on passing test/build, mutating-call nudge at 15 | Advisory |
 | `post-tool-telemetry.mjs` | PostToolUse (*) | Appends a call record (tool, agent type, dispatched type, role, file, slice) to `.spec/.session-telemetry.json` under a lock (`lib/telemetry-store.mjs`, PR #92) | Advisory. Undercounts: this session's file showed `totalToolCalls: 10` against 22 `calls` entries and more than 25 real calls |
@@ -126,7 +126,7 @@ Source of truth `lib/hard-blocks.mjs` (PR #100, #114):
 Not covered (open since 5 Nov): `git push origin :branch` (remote delete), `git branch -f`, `git reset --merge`, `git checkout <file>`.
 
 ### 5.2 Still-refusing locks outside the hard-block list
-In `pre-tool-guard.mjs`: more than one `[IN_PROGRESS]` slice (work lock), colour-tag change on the active slice, engine lock on Edit/Write in spokes, target-file scope lock while a slice is active, upshift locks for `architect-opus` and `engineer-sonnet` (**INERT** in threads: those agents live only in `.claude/agents/`). In `finish-slice.mjs`: refuses when telemetry shows the main thread wrote source files for the slice (blind to Bash writes). In spoke CI only: `ci-gate.mjs pr` fails a PR whose head commit lacks `Referee-Verdict`/`Referee-Tree` trailers or whose tree changed after stamping. The hub's own workflows do not run `ci-gate.mjs`.
+In `pre-tool-guard.mjs`: more than one `[IN_PROGRESS]` slice (work lock) and the engine lock on Edit/Write in spokes. The colour lock, upshift locks and doctor refusal were removed, and the target-file scope lock is now a warning (`scope_lock_warn` event). `finish-slice.mjs` no longer refuses for main-thread writes or files outside `Target files:`. It warns and stamps `Main-Thread-Writes:` and `Scope-Widened:` trailers. `--restamp` re-stamps an unstamped head (for example after merging `main`) once tests pass. In spoke CI only: `ci-gate.mjs pr` fails a PR whose head commit lacks `Referee-Verdict`/`Referee-Tree` trailers or whose tree changed after stamping. The hub's own workflows do not run `ci-gate.mjs`.
 
 ### 5.3 Soft gates (warn on stderr, append an event, allow)
 | Gate | Event kind | PR |
@@ -136,6 +136,7 @@ In `pre-tool-guard.mjs`: more than one `[IN_PROGRESS]` slice (work lock), colour
 | Main-thread Bash/Edit allow-list | `main_thread_warn` | #103 |
 | Goldfish search breaker (2 searches) | `goldfish_breaker_warn` | #105 |
 | Plan lock (edit with no slice) | `plan_lock_warn` | #111 |
+| Edit outside the slice's `Target files:` | `scope_lock_warn` | #128 |
 | Missing slice line in a PR (spoke CI) | `::warning::` annotation | #117 |
 | Telemetry dispatch gate in `finish-slice` | disabled outright, prints a notice | #95 |
 
@@ -166,7 +167,7 @@ Naming: `CLAUDE.md` calls the main thread "the main thread"; `AGENTS.md` calls i
 
 | Path | Written by | Read by | Lifetime | In git |
 |---|---|---|---|---|
-| `.spec/PROGRESS.md` | Threads, `start-slice.mjs`, `finish-slice.mjs`, `accept-plan` workflow | Guards, dashboard, status page | Permanent | Yes |
+| `.spec/PROGRESS.md` | Threads, `start-slice.mjs`, `finish-slice.mjs` | Guards, dashboard, status page | Permanent | Yes |
 | `.spec/SESSION_HANDOFF.md` | Any platform by hand, `gf-clerk` | `session-start.mjs` (injects 2 lines) | Permanent | Yes |
 | `.spec/plans/*.md` | Threads | `accept-plan.yml` | Permanent | Yes |
 | Commit trailers `Referee-*`, `Telemetry-*`, `Spec-Bypass-*` | `finish-slice.mjs`, `start-slice.mjs` | `ci-gate.mjs`, `baton-pickup.mjs` | Permanent | Yes |
@@ -208,10 +209,36 @@ Only rows marked "Permanent" survive a container. Everything the self-audit need
 1. **Slice:** one line in `.spec/PROGRESS.md`: `- [ ] **Slice N.M: title** [CORE / DATA|UI / VISUAL] Target files: … | Coords: […] | Verify: <command>`. `[IN_PROGRESS]` marks the active one. `[CORE / DATA]` needs tests; `[UI / VISUAL]` needs typecheck only.
 2. **Start:** `node .harness/scripts/start-slice.mjs <id>` marks it active and commits an anchor. `--from-scope <doc> --slice <id> --targets "<paths>" --reason "<why>"` anchors from an existing scope doc with `Spec-Bypass` trailers (PR #112).
 3. **Implement:** main thread dispatches `harness:gf-coder` with the slice line and Verify command.
-4. **Finish:** `node .harness/scripts/finish-slice.mjs "<msg>"` runs scope checks against `HEAD:.spec/PROGRESS.md`, marks `[x]`, stamps `Referee-Verdict: VERIFIED`, `Referee-Tree`, `Referee-Engine`, `Telemetry-*` trailers, commits. Auto-advance to the next slice was removed (PR #110). Optional `bin/verify-slice.sh` runs only if the operator's verify secret is present; CI is recorded as the verifier (PR #97).
-5. **Approve:** a plan file in `.spec/plans/` lists slices; merging it is the approval (`accept-plan.yml`, slice 8.3).
+4. **Finish:** `node .harness/scripts/finish-slice.mjs "<msg>"` runs scope checks against `HEAD:.spec/PROGRESS.md` (warnings only; see 5.2), marks `[x]`, stamps `Referee-Verdict: VERIFIED`, `Referee-Tree`, `Referee-Engine`, `Telemetry-*`, `Main-Thread-Writes:` and `Scope-Widened:` trailers, commits. Auto-advance to the next slice was removed (PR #110). Optional `bin/verify-slice.sh` runs only if the operator's verify secret is present; CI is recorded as the verifier (PR #97).
+5. **Approve:** a plan file in `.spec/plans/` lists slices; merging it records the approval. `accept-plan.yml` only validates that the plan's slices exist (`accept-plan.mjs --check`) and never pushes to `main`. Done means merged. Slice ids may carry a letter suffix (`10.7b`) and a slice line may carry `Issue: #N`.
 6. **Merge:** standing rule says merge green approved PRs automatically. Two mechanisms exist: a thread calls GitHub MCP `merge_pull_request` (records the operator as merger), or a thread adds label `harness:automerge` and `automerge.yml` merges with `GITHUB_TOKEN` as `github-actions[bot]` and dispatches the status snapshot. No PR from #89 to #117 carries the label.
 7. **CI on the hub:** `harness-verify.yml` (job `verify`: full tests, typecheck, lint) and `quick-checks.yml` (job `checks`: typecheck, lint, one test file). `accept-plan.yml`, `automerge.yml`, `status-snapshot.yml`. No branch protection; no required checks are enforced by GitHub.
+
+---
+
+## 9a. Slice issues and board
+
+Each slice has one GitHub Issue. `/spec` opens it with labels `slice`, `status:backlog` and the project label, and writes `Issue: #N` on the slice line. The slice PR body carries `Closes #N`. A thread with nothing in progress looks for open `status:ready` slice issues first (oldest first), then the `PROGRESS.md` backlog.
+
+Labels live in `.harness/config/labels.json` and are synced by `harness-labels.yml`.
+
+| Label | Meaning |
+|---|---|
+| `status:backlog` | Specified, not scheduled |
+| `status:ready` | Operator released it for pick-up |
+| `status:in-progress` | A non-draft or draft PR is open |
+| `status:blocked-on-operator` | Waiting on Charlie (gate-change PR, or `/needs-me`) |
+| `status:blocked` | Blocked for another reason |
+| `needs-input` | A question is open |
+| `gate-change` | Slice touches a gate; its PR needs the operator |
+| `slice`, `idea`, `plan`, `alarm` | Issue kind |
+| `project:hub`, `project:music-visualizer`, `project:concert-tracker` | Owning project |
+
+Status rules (`harness-issue-status.yml`, `issue-status.mjs`): PR opened, reopened, ready or draft sets `status:in-progress`. A non-draft PR labelled `gate-change` sets `status:blocked-on-operator`. A PR closed unmerged sets `status:backlog`. A merged PR removes status labels and GitHub closes the issue. A new issue labelled `slice` with no status gets `status:backlog` plus its project label. Agents never set status labels by hand.
+
+Comment commands (`harness-issue-commands.yml`, `issue-commands.mjs`, owner only): `/ready` (alias `/start`), `/backlog`, `/block <reason>`, `/unblock`, `/needs-me <question>`, `/wontdo`.
+
+Closed as completed is Done. Closed as not planned is Won't do. The Referee watch comments on one rolling "Harness alarms (rolling)" issue and skips bookkeeping commits.
 
 ---
 

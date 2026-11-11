@@ -17,11 +17,20 @@ These rules load into every thread. Repo `.claude/` hooks, agents and commands n
 - Read the files you will edit and the tests beside them. Do not survey the whole repo.
 
 ## Work modes
-- **Slice mode:** `.spec/PROGRESS.md` has exactly one `[IN_PROGRESS]` slice. Edit only its `Target files:`, plus `.spec/PROGRESS.md` and `.spec/SESSION_HANDOFF.md`.
+- **Slice mode:** `.spec/PROGRESS.md` has exactly one `[IN_PROGRESS]` slice. Prefer editing only its `Target files:`, plus `.spec/PROGRESS.md` and `.spec/SESSION_HANDOFF.md`. Editing outside them is allowed when needed. `finish-slice.mjs` records it as `Scope-Widened`, so say why in the pull request.
 - **Two or more `[IN_PROGRESS]` slices:** stop and ask which one to finish.
 - **No slice:** a quick fix changes one file and at most 25 lines. Anything larger needs a slice first, written with `/spec`.
 - **music-visualizer (standing rule, Charlie):** every change is a slice with the harness slice gate, including one-file changes. Do not use the quick-fix path there.
 - If a slice's `Target files:` are missing or unclear, ask. Do not guess.
+
+## Slice issues
+- `/spec` opens one GitHub Issue per slice with labels `slice`, `status:backlog` and the repo's project label. It then writes `Issue: #N` on the slice line.
+- Every slice pull request body includes `Closes #N`.
+- With nothing in progress, look for open issues labelled `status:ready` first (oldest first). Then use the `.spec/PROGRESS.md` backlog.
+- Never set status labels by hand. Workflows set them from pull request events.
+- To block a slice or ask Charlie something, comment `/block <reason>` or `/needs-me <question>` on the issue. The other commands are `/ready`, `/backlog`, `/unblock` and `/wontdo`.
+- Mark a slice that touches a gate with the `gate-change` label.
+- Use the GitHub MCP tools (`issue_write`, `add_issue_comment`) for issues. Never use `gh`.
 
 ## Verification
 Run both before every commit, once after the final edit:
@@ -36,7 +45,8 @@ Slice colour tags: `[UI / VISUAL]` needs typecheck only. `[CORE / DATA]` needs t
 
 ## Finishing a slice
 1. Run the verification commands above.
-2. Run `node .harness/scripts/finish-slice.mjs "<commit message>"`. It marks the slice `[x]`, stamps the `Referee-Verdict` and `Referee-Tree` trailers, and commits. Never type those trailers by hand.
+2. Run `node .harness/scripts/finish-slice.mjs "<commit message>"`. It marks the slice `[x]`, stamps the `Referee-Verdict` and `Referee-Tree` trailers, and commits. Never type those trailers by hand. It also stamps `Main-Thread-Writes:` and `Scope-Widened:` when they apply, and warns instead of refusing.
+   - After merging `main` into the branch, an unstamped head is fixed with `node .harness/scripts/finish-slice.mjs --restamp` once tests pass.
 3. Push and open the pull request (see below).
 - No bootstrap exceptions. Do not pass `--bootstrap` or claim one, and never hand-stamp a slice or its trailers (standing rule, Charlie).
 
