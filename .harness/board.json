@@ -6,7 +6,8 @@
   "repos": [
     "cchonguyen/claude-harness-hub",
     "cchonguyen/music-visualizer",
-    "cchonguyen/Concert-Tracker"
+    "cchonguyen/Concert-Tracker",
+    "cchonguyen/media-recommendation"
   ],
   "statusOptions": {
     "status:backlog": "Backlog",
