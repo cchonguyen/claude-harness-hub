@@ -1,0 +1,34 @@
+# Harness board sync. Adds open slice issues (and ones closed in the last 14 days) from the repos
+# listed in .harness/board.json to the user-owned GitHub Project, sets the Status field from each
+# issue's state and status:* label, and writes card moves back as labels.
+# Needs the repository secret PROJECT_BOARD_TOKEN (classic PAT) and the repository variable
+# BOARD_PROJECT_NUMBER. Without them the script logs a notice and exits 0.
+name: Harness board sync
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+  workflow_run:
+    workflows: ['Harness issue status']
+    types: [completed]
+
+concurrency:
+  group: board-sync
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  board-sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node .harness/scripts/board-sync.mjs
+        env:
+          PROJECT_BOARD_TOKEN: ${{ secrets.PROJECT_BOARD_TOKEN }}
+          BOARD_PROJECT_NUMBER: ${{ vars.BOARD_PROJECT_NUMBER }}
