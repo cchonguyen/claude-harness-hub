@@ -47,17 +47,23 @@ test('planBoard: add, set, ignore', () => {
 });
 
 test('planBoard: write-back rules', () => {
-  const p = planBoard({ issues: [issue({ labels: ['slice', 'status:ready'] })], items: [item({ status: 'In progress' })], options, optionIdsByName: ids });
+  const p = planBoard({ issues: [issue({ labels: ['slice', 'status:ready'] })], items: [item({ status: 'In progress' })], options, optionIdsByName: ids, dragWriteBack: true });
   assert.deepEqual(p.writeBack, [{ repo: 'me/r', number: 1, addLabel: 'status:in-progress', removeLabels: ['status:ready'], close: null }]);
-  const w = planBoard({ issues: [issue()], items: [item({ status: "Won't do" })], options, optionIdsByName: ids });
+  const w = planBoard({ issues: [issue()], items: [item({ status: "Won't do" })], options, optionIdsByName: ids, dragWriteBack: true });
   assert.equal(w.writeBack[0].close, 'not_planned');
   assert.deepEqual(w.writeBack[0].removeLabels, ['status:ready']);
-  const d = planBoard({ issues: [issue()], items: [item({ status: 'Done' })], options, optionIdsByName: ids });
+  const d = planBoard({ issues: [issue()], items: [item({ status: 'Done' })], options, optionIdsByName: ids, dragWriteBack: true });
   assert.equal(d.writeBack.length, 0);
   assert.equal(d.set.length, 1);
-  const c = planBoard({ issues: [issue({ state: 'closed', state_reason: 'completed' })], items: [item({ status: 'Ready' })], options, optionIdsByName: ids });
+  const c = planBoard({ issues: [issue({ state: 'closed', state_reason: 'completed' })], items: [item({ status: 'Ready' })], options, optionIdsByName: ids, dragWriteBack: true });
   assert.equal(c.writeBack.length, 0);
   assert.equal(c.set[0].name, 'Done');
+});
+
+test('planBoard: default ignores newer card status', () => {
+  const p = planBoard({ issues: [issue()], items: [item({ status: 'In progress' })], options, optionIdsByName: ids });
+  assert.deepEqual(p.writeBack, []);
+  assert.deepEqual(p.set, [{ itemId: 100, optionId: 'o2', name: 'Ready' }]);
 });
 
 function mockFetch(routes) {
@@ -123,6 +129,8 @@ test('run: set path and Link pagination', async () => {
   assert.deepEqual(f.calls.find((c) => c.method === 'PATCH').body, { fields: [{ id: 9, value: 'o2' }] });
 });
 
+const wb = { ...cfg, dragWriteBack: true };
+
 function writeBackRun(status) {
   return mockFetch([
     ['GET', /projectsV2\/3\/fields/, { json: fieldsResp }],
@@ -138,22 +146,42 @@ function writeBackRun(status) {
 
 test('run: write-back label', async () => {
   const f = writeBackRun('o3');
-  assert.equal(await runBoard({ env: { PROJECT_BOARD_TOKEN: 't' }, fetchImpl: f, config: cfg, log: quiet() }), 0);
+  assert.equal(await runBoard({ env: { PROJECT_BOARD_TOKEN: 't' }, fetchImpl: f, config: wb, log: quiet() }), 0);
   assert.deepEqual(f.calls.find((c) => c.method === 'POST').body, { labels: ['status:in-progress'] });
   assert.ok(f.calls.some((c) => c.method === 'DELETE' && /status%3Aready/.test(c.url)));
 });
 
 test("run: Won't do closes as not planned", async () => {
   const f = writeBackRun('o7');
-  assert.equal(await runBoard({ env: { PROJECT_BOARD_TOKEN: 't' }, fetchImpl: f, config: cfg, log: quiet() }), 0);
+  assert.equal(await runBoard({ env: { PROJECT_BOARD_TOKEN: 't' }, fetchImpl: f, config: wb, log: quiet() }), 0);
   assert.deepEqual(f.calls.find((c) => c.method === 'PATCH').body, { state: 'closed', state_reason: 'not_planned' });
 });
 
 test('run: Done is never written back', async () => {
   const f = writeBackRun('o6');
-  assert.equal(await runBoard({ env: { PROJECT_BOARD_TOKEN: 't' }, fetchImpl: f, config: cfg, log: quiet() }), 0);
+  assert.equal(await runBoard({ env: { PROJECT_BOARD_TOKEN: 't' }, fetchImpl: f, config: wb, log: quiet() }), 0);
   assert.ok(!f.calls.some((c) => c.method === 'POST' || c.method === 'DELETE' || /issues\/1$/.test(c.url)));
   assert.deepEqual(f.calls.find((c) => c.method === 'PATCH').body, { fields: [{ id: 9, value: 'o2' }] });
+});
+
+test('run: default cfg does not write back', async () => {
+  const f = writeBackRun('o3');
+  assert.equal(await runBoard({ env: { PROJECT_BOARD_TOKEN: 't' }, fetchImpl: f, config: cfg, log: quiet() }), 0);
+  assert.ok(!f.calls.some((c) => c.method === 'POST' || c.method === 'DELETE'));
+  assert.deepEqual(f.calls.find((c) => c.method === 'PATCH').body, { fields: [{ id: 9, value: 'o2' }] });
+});
+
+test('run: missing wanted option warns', async () => {
+  const f = mockFetch([
+    ['GET', /projectsV2\/3\/fields/, { json: [{ id: 9, name: 'Status', options: [{ id: 'o1', name: { raw: 'Backlog' } }] }] }],
+    ['GET', /projectsV2\/3\/items/, { json: [] }],
+    ['GET', /state=open/, { json: [{ number: 1, state: 'open', labels: ['status:ready'], updated_at: '2026-01-01T00:00:00Z' }] }],
+    ['GET', /state=closed/, { json: [] }],
+    ['POST', /projectsV2\/3\/items/, { status: 201, json: { id: 55 } }],
+  ]);
+  const log = quiet();
+  assert.equal(await runBoard({ env: { PROJECT_BOARD_TOKEN: 't' }, fetchImpl: f, config: cfg, log }), 0);
+  assert.ok(log.lines.includes('::warning::board-sync: status option "Ready" does not exist on project 3; card left without that status.'));
 });
 
 test('run: repo 404 warns and continues; API error exits 1', async () => {
