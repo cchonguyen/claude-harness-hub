@@ -17,5 +17,6 @@
     "done": "Done",
     "wontdo": "Won't do"
   },
-  "closedWindowDays": 14
+  "closedWindowDays": 14,
+  "dragWriteBack": false
 }

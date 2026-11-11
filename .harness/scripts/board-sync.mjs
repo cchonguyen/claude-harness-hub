@@ -43,7 +43,7 @@ function itemRepo(item) {
   return m ? m[1] : null;
 }
 
-export function planBoard({ issues, items, options, optionIdsByName }) {
+export function planBoard({ issues, items, options, optionIdsByName, dragWriteBack = false }) {
   const plan = { add: [], set: [], writeBack: [] };
   const byKey = new Map();
   for (const it of items) {
@@ -67,7 +67,7 @@ export function planBoard({ issues, items, options, optionIdsByName }) {
     const setPlan = () => {
       if (optionIdsByName[want]) plan.set.push({ itemId: item.id, optionId: optionIdsByName[want], name: want });
     };
-    if (cardNewer && have !== options.done && have && optionIdsByName[have]) {
+    if (dragWriteBack && cardNewer && have !== options.done && have && optionIdsByName[have]) {
       if (have === options.wontdo) {
         if (issue.state === 'closed' && issue.state_reason === 'not_planned') continue;
         plan.writeBack.push({ repo: issue.repo, number: issue.number, addLabel: null, removeLabels: present, close: 'not_planned' });
@@ -165,7 +165,15 @@ export async function runBoard({ env = process.env, fetchImpl = fetch, config, l
       }
     }
 
-    const plan = planBoard({ issues, items, options: cfg.statusOptions, optionIdsByName });
+    const warned = new Set();
+    for (const i of issues) {
+      const w = desiredStatus(i, cfg.statusOptions);
+      if (w && !optionIdsByName[w] && !warned.has(w)) {
+        warned.add(w);
+        log(`::warning::board-sync: status option "${w}" does not exist on project ${num}; card left without that status.`);
+      }
+    }
+    const plan = planBoard({ issues, items, options: cfg.statusOptions, optionIdsByName, dragWriteBack: cfg.dragWriteBack === true });
     const patch = (itemId, optionId) =>
       must('PATCH', `${base}/items/${itemId}`, { fields: [{ id: sf.id, value: optionId }] });
     for (const issue of plan.add) {
