@@ -1,0 +1,25 @@
+# Harness labels. Creates or updates the harness labels and this repo's project label.
+# Runs by hand or when .harness/config/labels.json changes on main. It never deletes labels.
+name: Harness labels
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.harness/config/labels.json']
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  labels:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node .harness/scripts/sync-labels.mjs
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
