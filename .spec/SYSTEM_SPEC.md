@@ -4,6 +4,14 @@
 
 ## 1. Core Scope & MVP Boundaries
 
+### Scope Brief (triaged 2026-11-11: slice tracking in GitHub Issues and Linear)
+- **Core User Problem:** Slice status (backlog, in progress, awaiting approval, done) lives only in `.spec/PROGRESS.md`. The owner wants it mirrored into GitHub Issues so a Linear kanban board can show it, without hand-maintained drift.
+- **MVP Deliverables (research and recommendation first; a build follows the owner's decision):**
+  1. A research memo comparing the mirror options (one-way from PROGRESS.md to Issues, then Linear through its GitHub integration or a sync the owner runs), with a status mapping table.
+  2. A gap audit of the existing slice record. PROGRESS.md has 56 slice lines: 43 carry `- [x]` and 13 have no checkbox (10.4 to 10.9, 11.1, 11.13 to 11.15, 11.16a, 11.17), so their status is not machine-readable. Slice IDs 10.7 and 11.9 each appear twice with different targets, which breaks a stable Issue key. There are no `- [ ]` or `[IN_PROGRESS]` lines today. `finish-slice.mjs` (about line 276) strips `[IN_PROGRESS]` and leaves unboxed lines, which is the likely cause.
+  3. Grilling questions the owner answers before any build.
+- **Decisions still open:** source of truth (recommended: PROGRESS.md on `main`, with ADR-011 deriving state from PRs and checks); sync direction (recommended: one-way); whether "awaiting approval" maps to the existing accept-plan flow or a new label; whether Issues live in the hub, in each spoke, or both; whether to renumber the duplicate 10.7 before any Issue keys exist; backfill of finished slices or new slices only; Linear's native GitHub integration or a sync the owner controls.
+
 ### Scope Brief (triaged 2026-11-03: making the repo public)
 - **Core User Problem:** The owner needs to switch this repository from private to public without leaking private data, and needs a repo that a stranger can understand and run within minutes.
 - **MVP Deliverables:**
@@ -17,6 +25,13 @@
 - **Gemini Bridge reference inlining:** in `spec` mode, `bundle-handoff.mjs` scans `.spec/SYSTEM_SPEC.md` (and `.spec/OVERVIEW.md`) for local Markdown links, resolves the ones that exist inside the repository, and inlines their contents under an `# APPENDED REFERENCES` section of `.spec/HANDOFF_PACKET.md`. Links outside the repo root, URLs, and missing files are skipped.
 
 ## 2. Strictly Out of Scope ("Do NOT Build" List)
+
+### Slice-tracking do-not-build (2026-11-11)
+- No writes to GitHub Issues, Linear, or any remote during research.
+- No change to hook, `finish-slice`, referee, or `PROGRESS.md` behavior or format in this step.
+- No deletion or renumbering of `PROGRESS.md` entries before the owner decides on the ID scheme.
+- No new workflow until the owner picks a source of truth and a sync model.
+- No Linear as source of truth, and no new dashboard.
 
 ### Public-release do-not-build
 - No change to hook, script, or dashboard behavior in this release.

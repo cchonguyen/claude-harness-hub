@@ -35,3 +35,4 @@ The single entry point and registry for harness-hub specification artifacts. Def
 - `441` [.spec/plans/harness-doctor-phase1.md](plans/harness-doctor-phase1.md) — Phase 1 doctor and telemetry plan (slices 10.1, 10.2)
 - `442` [.spec/post-mortems/dispatch-telemetry-2026-11-06.md](post-mortems/dispatch-telemetry-2026-11-06.md) — Dispatch telemetry post-mortem and gate-off record (slice 10.8)
 - `443` [.spec/post-mortems/harness-council-review-2026-11-06.md](post-mortems/harness-council-review-2026-11-06.md) — Post-mortem and questions for external council review
+- `444` [.spec/SCOUT.md](SCOUT.md) — Latest /triage scout metrics (files touched, contract change, cross-module)
