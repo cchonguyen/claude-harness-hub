@@ -240,6 +240,19 @@ Comment commands (`harness-issue-commands.yml`, `issue-commands.mjs`, owner only
 
 Closed as completed is Done. Closed as not planned is Won't do. The Referee watch comments on one rolling "Harness alarms (rolling)" issue and skips bookkeeping commits.
 
+## 9b. Ready-queue routine
+
+A scheduled Claude routine named "Harness ready queue" picks up released work. It reads the repos in `.harness/board.json`, lists open `status:ready` slice issues, and takes the oldest one per repo. It specs the slice if needed, then implements it under the harness rules and opens the PR. It does nothing when the queue is empty. It never takes an issue labelled `status:blocked-on-operator`, and it skips repos that already have a slice in progress.
+
+The trigger's prompt is the file `.harness/routines/ready-queue.md`. The schedule is set when the trigger is created. Suggested: weekdays, a few times a day.
+
+To pause it:
+1. In the Claude Code web app, open Routines (scheduled triggers).
+2. Find "Harness ready queue".
+3. Switch it off.
+
+Or leave no issues in Ready. The routine then does nothing.
+
 ---
 
 ## 10. Hub and spokes
