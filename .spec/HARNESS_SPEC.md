@@ -207,7 +207,7 @@ Only rows marked "Permanent" survive a container. Everything the self-audit need
 ## 9. Work model
 
 1. **Slice:** one line in `.spec/PROGRESS.md`: `- [ ] **Slice N.M: title** [CORE / DATA|UI / VISUAL] Target files: … | Coords: […] | Verify: <command>`. `[IN_PROGRESS]` marks the active one. `[CORE / DATA]` needs tests; `[UI / VISUAL]` needs typecheck only.
-2. **Start:** `node .harness/scripts/start-slice.mjs <id>` marks it active and commits an anchor. `--from-scope <doc> --slice <id> --targets "<paths>" --reason "<why>"` anchors from an existing scope doc with `Spec-Bypass` trailers (PR #112).
+2. **Start:** `node .harness/scripts/start-slice.mjs <id>` marks it active and commits an anchor. `--from-scope <doc> --slice <id> --targets "<paths>" --reason "<why>"` anchors from an existing scope doc with `Spec-Bypass` trailers (PR #112). `--adhoc --title "<t>" --tag core|ui --targets "<a,b>" --verify "<cmd>" --issue <N> --reason "<why>"` (optional `--id`, `--gate-change`) opens an on-the-fly slice with no scope doc: it appends the slice line, marks it active and commits the anchor with `Spec-Bypass: on-the-fly Issue #N` and `Spec-Bypass-Reason`. It refuses 5 or more targets and Red tripwire paths; those go through `/spec`. The operator's request is the approval.
 3. **Implement:** main thread dispatches `harness:gf-coder` with the slice line and Verify command.
 4. **Finish:** `node .harness/scripts/finish-slice.mjs "<msg>"` runs scope checks against `HEAD:.spec/PROGRESS.md` (warnings only; see 5.2), marks `[x]`, stamps `Referee-Verdict: VERIFIED`, `Referee-Tree`, `Referee-Engine`, `Telemetry-*`, `Main-Thread-Writes:` and `Scope-Widened:` trailers, commits. Auto-advance to the next slice was removed (PR #110). Optional `bin/verify-slice.sh` runs only if the operator's verify secret is present; CI is recorded as the verifier (PR #97).
 5. **Approve:** a plan file in `.spec/plans/` lists slices; merging it records the approval. `accept-plan.yml` only validates that the plan's slices exist (`accept-plan.mjs --check`) and never pushes to `main`. Done means merged. Slice ids may carry a letter suffix (`10.7b`) and a slice line may carry `Issue: #N`.
@@ -218,7 +218,7 @@ Only rows marked "Permanent" survive a container. Everything the self-audit need
 
 ## 9a. Slice issues and board
 
-Each slice has one GitHub Issue. `/spec` opens it with labels `slice`, `status:backlog` and the project label, and writes `Issue: #N` on the slice line. The slice PR body carries `Closes #N`. A thread with nothing in progress looks for open `status:ready` slice issues first (oldest first), then the `PROGRESS.md` backlog.
+Each slice has one GitHub Issue. `/spec` opens it with labels `slice`, `status:backlog` and the project label, and writes `Issue: #N` on the slice line. The slice PR body carries `Closes #N`. A thread with nothing in progress looks for open `status:ready` slice issues first (oldest first), then the `PROGRESS.md` backlog. An on-the-fly slice (`start-slice.mjs --adhoc`) follows the same rules: the thread opens the issue first with `issue_write`, passes its number as `--issue <N>`, and the anchor commit carries `Spec-Bypass: on-the-fly Issue #N`.
 
 Labels live in `.harness/config/labels.json` and are synced by `harness-labels.yml`.
 
