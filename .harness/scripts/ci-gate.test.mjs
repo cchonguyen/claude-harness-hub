@@ -199,3 +199,45 @@ test('checkPullRequest treats a workflow that differs from its template as a rea
   const { problems } = checkPullRequest({ base: 'main', head: 'feature', cwd: dir });
   assert.ok(problems.some((p) => /No Referee trailer/.test(p)));
 });
+
+function writePkg(dir, obj) {
+  fs.writeFileSync(path.join(dir, 'package.json'), `${JSON.stringify(obj, null, 2)}\n`);
+}
+
+function makePkgRepo() {
+  const dir = makeRepo();
+  sh(dir, ['checkout', '-q', 'main']);
+  writePkg(dir, { name: 'x', version: '0.2.0', dependencies: { a: '1.0.0' } });
+  sh(dir, ['add', '-A']);
+  sh(dir, ['commit', '-q', '-m', 'add package.json']);
+  sh(dir, ['checkout', '-q', '-b', 'sync']);
+  return dir;
+}
+
+test('checkPullRequest passes engine files plus a version-only package.json bump', () => {
+  const dir = makePkgRepo();
+  writeEngine(dir, 'name: labels\n');
+  writePkg(dir, { name: 'x', version: '0.2.1', dependencies: { a: '1.0.0' } });
+  commitPlain(dir);
+  const r = checkPullRequest({ base: 'main', head: 'sync', cwd: dir });
+  assert.deepEqual(r.problems, []);
+  assert.match(r.notes[0], /Engine sync PR/);
+  assert.equal(r.notes.length, 2);
+});
+
+test('checkPullRequest still fails engine files plus a package.json dependency change', () => {
+  const dir = makePkgRepo();
+  writeEngine(dir, 'name: labels\n');
+  writePkg(dir, { name: 'x', version: '0.2.1', dependencies: { a: '2.0.0' } });
+  commitPlain(dir);
+  const { problems } = checkPullRequest({ base: 'main', head: 'sync', cwd: dir });
+  assert.ok(problems.some((p) => /No Referee trailer/.test(p)));
+});
+
+test('checkPullRequest still fails a package.json version bump alone', () => {
+  const dir = makePkgRepo();
+  writePkg(dir, { name: 'x', version: '0.2.1', dependencies: { a: '1.0.0' } });
+  commitPlain(dir);
+  const { problems } = checkPullRequest({ base: 'main', head: 'sync', cwd: dir });
+  assert.ok(problems.some((p) => /No Referee trailer/.test(p)));
+});
