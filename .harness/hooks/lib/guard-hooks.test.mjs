@@ -61,6 +61,8 @@ test('manager mode with no active slice warns but allows source edits (PLAN LOCK
   const r = runHook(GUARD, dir, { ...edit(dir, 'src/app.js'), agent_type: 'gf-coder' });
   assert.equal(r.status, 0);
   assert.match(r.stderr, /WARN: PLAN LOCK/);
+  assert.match(r.stderr, /start-slice\.mjs --adhoc/);
+  assert.doesNotMatch(r.stdout || '', /"decision":\s*"block"/);
   const events = fs.readFileSync(path.join(dir, '.spec', '.events', 's1.jsonl'), 'utf8');
   assert.match(events, /"kind":"plan_lock_warn"/);
 });
