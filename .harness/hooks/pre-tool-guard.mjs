@@ -538,7 +538,7 @@ if (isDirectRun) {
 
   if (modeOf(root) === 'locked') {
     // Plan lock is a soft warn: log it on stderr and to the event log, then let the edit proceed.
-    console.error('WARN: PLAN LOCK: No task is marked [IN_PROGRESS] in .spec/PROGRESS.md. Run /triage or /spec first.');
+    console.error('WARN: PLAN LOCK: No task is marked [IN_PROGRESS] in .spec/PROGRESS.md. Run /spec, or open an on-the-fly slice: node .harness/scripts/start-slice.mjs --adhoc (see CLAUDE.md, Work modes).');
     appendEvent(root, {
       session: event.session_id,
       kind: 'plan_lock_warn',
