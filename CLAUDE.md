@@ -19,7 +19,7 @@ These rules load into every thread. Repo `.claude/` hooks, agents and commands n
 ## Work modes
 - **Slice mode:** `.spec/PROGRESS.md` has exactly one `[IN_PROGRESS]` slice. Prefer editing only its `Target files:`, plus `.spec/PROGRESS.md` and `.spec/SESSION_HANDOFF.md`. Editing outside them is allowed when needed. `finish-slice.mjs` records it as `Scope-Widened`, so say why in the pull request.
 - **Two or more `[IN_PROGRESS]` slices:** stop and ask which one to finish.
-- **No slice:** a quick fix changes one file and at most 25 lines. Anything larger needs a slice first, written with `/spec`.
+- **No slice:** a quick fix changes one file and at most 25 lines (the slice gate shows red, by design). Anything larger, or any fix that should pass the slice gate, opens an on-the-fly slice in one step. First open the issue with GitHub MCP `issue_write` (labels `slice`, `status:backlog`, the project label, plus `gate-change` when it changes a gate). Then run `node .harness/scripts/start-slice.mjs --adhoc --title "<t>" --tag core|ui --targets "<a,b>" --verify "<cmd>" --issue <N> --reason "<operator request or bug>"`. The operator's request is the approval for that slice. No plan file or `/spec` is needed. Red tripwire paths and 5 or more files still go through `/spec`.
 - **music-visualizer (standing rule, Charlie):** every change is a slice with the harness slice gate, including one-file changes. Do not use the quick-fix path there.
 - If a slice's `Target files:` are missing or unclear, ask. Do not guess.
 
@@ -30,6 +30,7 @@ These rules load into every thread. Repo `.claude/` hooks, agents and commands n
 - Never set status labels by hand. Workflows set them from pull request events.
 - To block a slice or ask Charlie something, comment `/block <reason>` or `/needs-me <question>` on the issue. The other commands are `/ready`, `/backlog`, `/unblock` and `/wontdo`.
 - Mark a slice that touches a gate with the `gate-change` label.
+- On-the-fly slices (`start-slice.mjs --adhoc`) follow the same issue rules: one issue, the same labels, `Closes #N` in the pull request.
 - Use the GitHub MCP tools (`issue_write`, `add_issue_comment`) for issues. Never use `gh`.
 
 ## Verification

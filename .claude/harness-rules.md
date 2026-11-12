@@ -20,7 +20,7 @@
 - **Vibe Mode (no `[IN_PROGRESS]` slice, or no `.spec/PROGRESS.md`):** Edit the requested files directly. Do NOT require `/triage` or `/spec` first. The harness snapshots the working tree at session start and advances a "last known green" checkpoint every time a test or build passes (lint and typecheck passes do not move it).
 - **Slice Mode (exactly 1 `[IN_PROGRESS]` slice):** Strict single-task lock. Edit only `.spec/` files and the slice's declared `Target files:`. A slice-start checkpoint (`.spec/.slice-checkpoint`) is saved automatically when the line is marked `[IN_PROGRESS]`.
 - **2+ `[IN_PROGRESS]` slices:** Edits are blocked. Keep only 1 active slice (or clear them all for Vibe Mode).
-- **Manager Mode (`.spec/harness.json` says `"workMode": "manager"`):** With no `[IN_PROGRESS]` slice, source edits are blocked (PLAN LOCK). Plan with `/triage` or `/spec`, or make a one-file change with `/quick-fix`. Harness files, `.spec/harness.json`, and the harness block in `AGENTS.md` are locked in every mode.
+- **Manager Mode (`.spec/harness.json` says `"workMode": "manager"`):** With no `[IN_PROGRESS]` slice, source edits are blocked (PLAN LOCK). Plan with `/triage` or `/spec`, make a one-file change with `/quick-fix`, or open an on-the-fly slice in one step: open the issue first, then run `node .harness/scripts/start-slice.mjs --adhoc --title "<t>" --tag core|ui --targets "<a,b>" --verify "<cmd>" --issue <N> --reason "<operator request or bug>"`. The operator's request is the approval, so no plan file or `/spec` is needed. Red tripwire paths and 5 or more files still go through `/spec`. Harness files, `.spec/harness.json`, and the harness block in `AGENTS.md` are locked in every mode.
 - **Pending rule candidates:** Lines under `## Pending Rule Candidates — not in force` in `.claude/project-rules.md` are not rules. Do not follow them until the operator promotes one with `/learn promote`.
 - **Main-red stop:** While origin has the tag `harness-main-red`, do not start a slice or a quick fix. Fixing main is the only work.
 
@@ -43,6 +43,7 @@
 - Never set status labels by hand. Workflows set them from pull request events.
 - To block a slice or ask the operator something, comment `/block <reason>` or `/needs-me <question>` on the issue. The other commands are `/ready`, `/backlog`, `/unblock` and `/wontdo`.
 - Mark a slice that touches a gate with the `gate-change` label.
+- On-the-fly slices (`start-slice.mjs --adhoc`) follow the same issue rules. Open the issue with `issue_write` first (labels `slice`, `status:backlog`, the project label, plus `gate-change` when it applies), then pass its number as `--issue <N>`.
 - Use the GitHub MCP tools (`issue_write`, `add_issue_comment`) for issues. Never use `gh`.
 - A slice already in `.spec/PROGRESS.md` with no `Issue: #N` gets its issue before work starts. The status label follows the pull request, so the board shows it.
 
