@@ -1,6 +1,9 @@
 /* Harness UI tokens. Hub-owned: change them in claude-harness-hub, never in a project.
    Dark is the default. Light applies when the device asks for it or when <html data-theme="light"> is set.
-   <html data-theme="dark"> forces dark on a light device. */
+   <html data-theme="dark"> forces dark on a light device. A project that is dark-native or light-native
+   sets data-theme once and declares theme-lock in design-system/profile.md.
+   Font roles: components read --font-display, --font-sans and --font-mono and never name a typeface.
+   An app overrides a role in its own app.css, loaded after bundle.css. */
 :root {
   color-scheme: dark;
   --bg: #0f0f12;
@@ -90,9 +93,11 @@
   --neon-azure: #1d5fd1;
   --neon-cyan: #0b7285;
   --neon-lime: #4d7c0f;
+  --accent: var(--neon-violet);
   --accent-strong: #4a31b8;
   --accent-tint: #f0edfd;
   --on-accent: #ffffff;
+  --focus: var(--accent);
   --good: #0b7a5c;
   --good-tint: #e4f6ef;
   --warn: #8a4b08;
@@ -131,6 +136,7 @@
   --z-pop: 30;
   --z-dialog: 40;
   --z-toast: 50;
+  /* Font roles */
   --font-display: Newsreader, ui-serif, Georgia, serif;
   --font-sans: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
   --font-mono: JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace;
