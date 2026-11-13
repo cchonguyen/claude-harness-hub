@@ -62,6 +62,13 @@
 - **Engine files:** External agents never edit `.claude/`, `.harness/`, or `.harness-version` in spoke repos. Those change only in this hub repo.
 - **Audit Registry & Relay:** Review findings and verdicts are recorded in `.spec/AUDIT_VERDICT.json` and posted as PR review comments with structured verdicts (`CLEAN` or `NEEDS CHANGES`).
 
+## Design System
+- The shared look, Harness UI, lives in `.harness/design-system/` (`README.md`, `tokens.css`, `ui.css`). The hub owns it and sync delivers it.
+- Before adding or changing a UI component, read `.harness/design-system/README.md`, and the project's `docs/design-profile.md` when it exists.
+- Use an existing `ui-` component before building a new one. Build a new one from the tokens.
+- The six floor rules in that README hold in every project. Everything else in it is a default: a project may depart from one by writing a line with the reason in `docs/design-profile.md`.
+- No gate checks this. It is a starting kit, and existing screens move onto it when a change touches them.
+
 ## Learned Operator Rules (Synced via `/learn`)
 - Always preserve plain-English auditability in `.spec/OVERVIEW.md` at major feature milestones.
 - When giving the operator steps to run in Terminal, always use labelled, one-per-stage fenced code blocks with full absolute paths and the expected result after each block. Every command must be complete and paste-ready: never a partial snippet, never "run the same as before", and never a path the operator has not confirmed. Before writing Terminal steps, confirm the project folder with a directory listing.
