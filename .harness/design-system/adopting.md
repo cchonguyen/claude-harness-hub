@@ -51,4 +51,4 @@ Floor rules 1 to 5 in the README, and rule 6 as it is written there.
 | Media Recommendation | `neon-azure` | Maps from the blue it uses today. |
 | Next apps | `neon-magenta`, `neon-lime` | Reserved. Music Visualizer is the likely first. |
 
-Target spacing is 40° of hue or more. Measured in OKLCH, cyan sits 50° from azure and 84° from violet, and magenta and lime are well clear. Violet and azure sit 34° apart, under the target. The assignment stands as set. Revisit it if the two apps read as too alike side by side.
+Target spacing is 40° of hue or more. Measured in OKLCH, violet and azure sit 40° apart in both themes (dark 295° and 255°, light 297° and 257°). Cyan sits 42° to 47° from azure and more than 80° from violet, and magenta and lime are well clear. Tune a hue by moving the OKLCH hue angle only, so lightness and chroma stay put.
