@@ -63,10 +63,10 @@
 - **Audit Registry & Relay:** Review findings and verdicts are recorded in `.spec/AUDIT_VERDICT.json` and posted as PR review comments with structured verdicts (`CLEAN` or `NEEDS CHANGES`).
 
 ## Design System
-- The shared look, Harness UI, lives in `.harness/design-system/` (`README.md`, `tokens.css`, `ui.css`). The hub owns it and sync delivers it.
-- Before adding or changing a UI component, read `.harness/design-system/README.md`, and the project's `docs/design-profile.md` when it exists.
-- Use an existing `ui-` component before building a new one. Build a new one from the tokens.
-- The six floor rules in that README hold in every project. Everything else in it is a default: a project may depart from one by writing a line with the reason in `docs/design-profile.md`.
+- The shared look, Harness UI, lives in `.harness/design-system/` (`README.md`, `adopting.md`, `principles.md`, `voice.md`, `tokens.css`, `bundle.css`). The hub owns it and sync delivers it.
+- Before adding or changing a UI component, read its `README.md`, `voice.md` and `principles.md`, and the project's `design-system/profile.md` when it exists.
+- Use an existing `ui-` component before building a new one. App-only styles go in the project's own `app.css`, loaded after `bundle.css`. Never edit `tokens.css` or `bundle.css` in a project.
+- The six floor rules in the README hold in every project. Everything else in it is a default: a project may depart from one by writing a line with the reason in `design-system/profile.md`.
 - No gate checks this. It is a starting kit, and existing screens move onto it when a change touches them.
 
 ## Learned Operator Rules (Synced via `/learn`)
