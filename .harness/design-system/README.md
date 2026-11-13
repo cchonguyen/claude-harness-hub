@@ -136,7 +136,9 @@ You provide the label, an optional leading lucide icon, and `type`. Write `type=
 
 Labels are a verb plus an object in sentence case: "Delete list", "Look again". Never "OK" or "Submit".
 
-Height is `touch-phone` below 640 px and `touch-desktop` above. Do not set a height yourself.
+Height is `touch-phone` below 640 px and `touch-desktop` above, through one shared pair of tokens: `--control-h` and `--control-fs` (44 px and 16 px, then 36 px and 14 px). Button, input, select and textarea all read them, so they always match. Do not set a height or text size on a control yourself.
+
+Inside a table row, put `ui-table` on the table. From 640 px up its buttons, inputs and selects use `--control-h-compact` and `--control-fs-compact` (32 px and 13 px), so rows stay short. Two fields that belong together in a row, such as Rating and Tier, go in a `ui-control-pair` so they sit side by side and do not stack.
 
 ### Field
 

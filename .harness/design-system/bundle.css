@@ -38,7 +38,7 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-sans
 .ui-btn:focus-visible,.ui-icon-btn:focus-visible,.ui-input:focus-visible,.ui-segmented__opt:focus-visible,.ui-switch input:focus-visible,.ui-check input:focus-visible,.ui-nav-item:focus-visible,.ui-menu-item:focus-visible,.ui-tab:focus-visible,.ui-link:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
 
 /* Button */
-.ui-btn{display:inline-flex;align-items:center;justify-content:center;gap:var(--space-2);min-height:var(--touch-phone);padding:0 var(--space-4);border:1px solid var(--line-strong);border-radius:var(--radius-control);background:var(--surface-raised);color:var(--text);font:600 14px/20px var(--font-sans);white-space:nowrap;cursor:pointer;text-decoration:none;transition:background-color var(--duration-fast),border-color var(--duration-fast),color var(--duration-fast)}
+.ui-btn{display:inline-flex;align-items:center;justify-content:center;gap:var(--space-2);min-height:var(--control-h);padding:0 var(--space-4);border:1px solid var(--line-strong);border-radius:var(--radius-control);background:var(--surface-raised);color:var(--text);font:600 14px/20px var(--font-sans);white-space:nowrap;cursor:pointer;text-decoration:none;transition:background-color var(--duration-fast),border-color var(--duration-fast),color var(--duration-fast)}
 .ui-btn:hover{background:var(--mid);border-color:var(--mid-line)}
 .ui-btn--primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
 .ui-btn--primary:hover{background:var(--accent-strong);border-color:var(--accent-strong)}
@@ -55,12 +55,14 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-sans
 
 /* Field */
 .ui-field{display:flex;flex-direction:column;gap:var(--space-2);min-width:0}
-.ui-input,.ui-textarea,.ui-select{width:100%;min-height:var(--touch-phone);padding:0 var(--space-3);border:1px solid var(--line-strong);border-radius:var(--radius-control);background:var(--surface-sunken);color:var(--text);font:400 16px/22px var(--font-sans);transition:border-color var(--duration-fast)}
+.ui-input,.ui-textarea,.ui-select{width:100%;min-height:var(--control-h);padding:0 var(--space-3);border:1px solid var(--line-strong);border-radius:var(--radius-control);background:var(--surface-sunken);color:var(--text);font:400 var(--control-fs)/1.4 var(--font-sans);transition:border-color var(--duration-fast)}
 .ui-input::placeholder,.ui-textarea::placeholder{color:var(--text-faint)}
 .ui-input:hover,.ui-textarea:hover,.ui-select:hover{border-color:var(--mid-text)}
 .ui-input[aria-invalid="true"],.ui-textarea[aria-invalid="true"],.ui-select[aria-invalid="true"]{border-color:var(--bad)}
 .ui-textarea{min-height:96px;padding:var(--space-2) var(--space-3);resize:vertical}
 .ui-select-wrap{position:relative;display:block}
+.ui-control-pair{display:flex;flex-wrap:nowrap;gap:var(--space-2)}
+.ui-control-pair>*{flex:1 1 0;min-width:0}
 .ui-select-wrap .ui-select{appearance:none;-webkit-appearance:none;padding-right:var(--space-8)}
 .ui-select-wrap svg{position:absolute;right:var(--space-3);top:50%;width:16px;height:16px;transform:translateY(-50%);pointer-events:none;color:var(--text-muted);fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round}
 .ui-select option{background:var(--surface-raised);color:var(--text)}
@@ -154,8 +156,13 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-sans
 .ui-tab[aria-current="page"] svg{color:var(--accent)}
 
 @media (min-width:640px){
-  .ui-btn,.ui-input,.ui-menu-item{min-height:var(--touch-desktop)}
-  .ui-input{font-size:14px}
+  .ui-menu-item{min-height:var(--touch-desktop)}
+  .ui-table .ui-input,.ui-table .ui-select,.ui-table .ui-btn{min-height:var(--control-h-compact);font-size:var(--control-fs-compact);line-height:18px}
+  .ui-table .ui-input,.ui-table .ui-select{padding-left:var(--space-2)}
+  .ui-table .ui-select-wrap .ui-select{padding-right:var(--space-6)}
+  .ui-table .ui-select-wrap svg{right:var(--space-2);width:14px;height:14px}
+  .ui-table .ui-select-wrap{min-width:8rem}
+  .ui-table .ui-control-pair .ui-select-wrap{min-width:4.75rem}
   .ui-icon-btn{width:var(--touch-desktop);height:var(--touch-desktop)}
   .ui-icon-btn--dismiss{width:var(--touch-dismiss);height:var(--touch-dismiss)}
   .ui-scrim{place-items:center;padding:var(--space-4)}

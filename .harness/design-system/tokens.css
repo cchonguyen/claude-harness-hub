@@ -124,6 +124,10 @@
   --touch-phone: 44px;
   --touch-desktop: 36px;
   --touch-dismiss: 40px;
+  --control-h: var(--touch-phone);
+  --control-fs: 16px;
+  --control-h-compact: 32px;
+  --control-fs-compact: 13px;
   --sidebar-width: 248px;
   --measure: 68ch;
   --bp-sm: 640px;
@@ -140,4 +144,12 @@
   --font-display: Newsreader, ui-serif, Georgia, serif;
   --font-sans: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
   --font-mono: JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* Control size steps down together at the desktop breakpoint: button, input, select and textarea read these two. */
+@media (min-width: 640px) {
+  :root {
+    --control-h: var(--touch-desktop);
+    --control-fs: 14px;
+  }
 }
