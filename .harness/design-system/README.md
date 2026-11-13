@@ -1,10 +1,8 @@
-# Harness UI
-
 Harness UI is the shared look of a suite of personal apps: dark by default, quiet neutrals, one neon signature hue per app, a mid-tone that joins the two, and typography that does the work decoration usually does.
 
-This folder holds what code consumes: `tokens.css` and `ui.css`. Load `tokens.css` first. Both are plain CSS, so a React app and a server-rendered app use the same files. The hub owns this folder and sync delivers it to every project, so change it in `claude-harness-hub` only.
+This folder holds what code consumes: `tokens.css` and `bundle.css`. Load `tokens.css` first, then `bundle.css`, then the app's own `app.css`. All are plain CSS, so a React app and a server-rendered app use the same files. The hub owns this folder and sync delivers it to every project, so change it in `claude-harness-hub` only. `adopting.md`, `principles.md` and `voice.md` sit beside this file.
 
-The live reference, with every token and component rendered in dark and light, is https://claude.ai/artifact/3oDGNem4W16ah61RnmcbQp. A change to a token or component goes to both places in the same piece of work. Load the two hosted faces from Google Fonts: Newsreader (400, 500) and JetBrains Mono (400, 500).
+The live reference, with every token and component rendered in dark and light, is https://claude.ai/artifact/3oDGNem4W16ah61RnmcbQp. A change to a token or a component goes to both places in the same piece of work. Load the two hosted faces from Google Fonts: Newsreader (400, 500) and JetBrains Mono (400, 500).
 
 ## What holds everywhere, and what an app decides
 
@@ -15,9 +13,11 @@ Six rules are the floor. They hold in every app with no exceptions.
 3. State is never shown by colour alone. A word, tick or icon goes with it.
 4. Focus is always visible: a 2 px `focus` outline, offset 2 px.
 5. Tappable controls are at least `touch-phone` (44 px) tall below 640 px.
-6. Every screen is designed in dark and light, at phone and desktop width.
+6. Every screen works at phone and desktop width, in every theme the app ships.
 
-Everything else on this page is a default. An app follows it unless it has a reason not to, and writes that reason in one line in its own `docs/design-profile.md`.
+Rules 1 and 2 are the dual-theme guarantee, and `tokens.css` keeps both themes intact in every app. An app that is dark-native (a real-time visualizer, a canvas tool) may declare `theme-lock: dark`, or `theme-lock: light`, in `design-system/profile.md` with a one-line justification. It then sets `data-theme` on `<html>` once, ships a single theme, and skips dual-theme screen checks. Nothing else in the tokens changes.
+
+Everything else on this page is a default. An app follows it unless it has a reason not to, and writes that reason in one line in its own `design-system/profile.md`. That file sits at the project root. It is the app's own, and sync never touches it.
 
 An app always decides these for itself: its signature hue, its density preset, its own states, its content layouts, and any component this system does not have.
 
@@ -30,11 +30,12 @@ Three layers, in fixed proportions. Neutrals carry about 85% of a screen, the mi
 **Accent.** Each app claims one signature hue from the neon set: `neon-violet`, `neon-magenta`, `neon-azure`, `neon-cyan`, `neon-lime`. Set it once with `data-accent` on `<html>`. Violet is the default. Components only ever read `accent`.
 
 - In dark mode the accent is bright and its fill takes dark `on-accent` ink, like a lit sign. In light mode the same hue deepens and takes white ink.
-- Spend the accent on four things: the primary button, links, the current navigation mark, and selection. Nothing else.
+- Spend the accent on five things: the primary button, links, the current navigation mark, selection, and active interactive value indicators. That last group is active filter pills and chips, toggle switches, range sliders and scrubbers (`accent-color: var(--accent)`), and the primary series of a chart. Nothing else.
+- `good`, `warn` and `bad` never stand in for an active control. A switch that is on is accent, never green.
 - `glow-accent` is the one glow. Use it on at most one element per screen. No gradients, no glowing text, no neon borders on ordinary cards.
 - Two apps should sit at least 40° of hue apart, so the suite reads as a set.
 
-**Mid-tone.** `mid`, `mid-line` and `mid-text` are the accent mixed into the neutrals: 20% into `surface-raised`, 40% into `line`, 50% into `text`. They soften the jump from gray to neon. Use them for hover fills, selected rows, quiet pills and informational notices. When an app changes its accent, `ui.css` derives its mid-tone with the same recipe.
+**Mid-tone.** `mid`, `mid-line` and `mid-text` are the accent mixed into the neutrals: 20% into `surface-raised`, 40% into `line`, 50% into `text`. They soften the jump from gray to neon. Use them for hover fills, selected rows, quiet pills and informational notices. When an app changes its accent, `bundle.css` derives its mid-tone with the same recipe.
 
 **State.** `good`, `warn` and `bad` are fixed in every app and under every accent, each with a `-tint` fill. They are never used as an app's signature, and the accent is never used as a state.
 
@@ -45,6 +46,8 @@ Three faces, three jobs. The contrast between them is the main visual device of 
 - **Display: Newsreader.** A serif, set large and light with tight tracking. Use `display-xl`, `display-lg` and `display-md` for the page title, section titles, dialog titles and the app name. One display title per screen is the loudest thing on it.
 - **Text: the system sans.** Utilitarian on purpose, and free to load. Use `heading`, `body`, `body-compact` and `caption` for everything a person reads or operates.
 - **Mono: JetBrains Mono.** Use `label` in uppercase for eyebrows above fields and sections, and `data` with tabular numerals for counts, dates, durations and IDs. This is where the technical character comes from.
+
+Components never name a typeface. They read three role variables: `--font-display`, `--font-sans` and `--font-mono`, which default to Newsreader, the system sans stack and JetBrains Mono. A serif display face does not suit every domain, so an app may override `--font-display` (for example to a grotesk for a real-time visualizer or a high-density utility tool). The override goes in the app's own `app.css`, loaded after the kit, and `design-system/profile.md` records it with one line of reasoning.
 
 Rules:
 
@@ -60,16 +63,18 @@ Rules:
 - Borders separate surfaces before shadows do. Only floating surfaces take a shadow: `shadow-pop` for menus, popovers and toasts, `shadow-dialog` for dialogs.
 - Every floating surface is the same object: `surface-raised`, a `line` border, `radius-card`, `shadow-pop`. Menu, Popover and Toast must look related.
 - Spacing moves in 4 px steps from `space-1` to `space-12`. Lay out with gap, not margins.
+- Three structural classes cover most containers: `surface-card` for content that sits on the page, `surface-well` for an inset area such as a code block or a group of inputs, and `table-scroll` for anything wider than the screen. Reach for these before writing a container of your own.
+- Density is set once on `<html>` with `data-density="comfortable"` or `"compact"`. Card and well padding, and base text size, follow it. Touch targets do not.
 - Motion is short and functional: `duration-fast` for hover and colour, `duration-enter` for surfaces arriving. Under `prefers-reduced-motion`, transitions turn off.
 
 ## Layout
 
 - Design the phone screen and the desktop screen together. Neither is derived from the other at the end.
 - Three breakpoints: `bp-sm` 640 px, `bp-md` 768 px, `bp-lg` 1100 px.
-- Navigation is the AppShell: a sidebar from `bp-lg`, a bottom tab bar below it, the same destinations in both.
-- A record's detail view is a split view from `bp-lg`, a slide-over from `bp-md`, and a bottom sheet on phones.
+- Navigation is the AppShell: a sidebar from `bp-lg`, a bottom tab bar below it, the same destinations in both. A single-workspace or canvas app with fewer than three destinations uses the `minimal` variant instead, a compact top bar at every width.
+- A record's detail view defaults to master-detail: a split view from `bp-lg`, a slide-over from `bp-md`, and a bottom sheet on phones. It is a default, not a law. `design-system/profile.md` may choose one pattern for a screen instead: a dedicated route, a modal or sheet, or a split view.
 - A dialog is a centred card from `bp-sm` and a bottom sheet below it.
-- The page body never scrolls sideways. Wide tables scroll inside their own container.
+- The page body never scrolls sideways. A wide table goes inside `table-scroll`.
 
 ## Iconography
 
@@ -89,7 +94,7 @@ Rules:
 
 ## Components
 
-Each component is a set of `ui-` classes in `ui.css`. Use them before building a new pattern. When an app needs a component that is not here, build it from the tokens, give it the same floating surface, radius and focus rules, and offer it back to the hub once a second app needs it.
+Each component is a set of `ui-` classes in `bundle.css`. Use them before building a new pattern. When an app needs a component that is not here, build it from the tokens in `app.css`, give it the same floating surface, radius and focus rules, and offer it back to the hub once a second app needs it.
 
 ### AppShell
 
@@ -105,6 +110,16 @@ You provide the app mark, the app name, up to five top-level destinations, and t
 - Every page opens the same way: an eyebrow, then one display title, then the content. That title is the only large type on the screen.
 - Detail views follow the width: a split view from 1100 px, a slide-over from 768 px, a bottom sheet below that.
 - The page body never scrolls sideways. The side gutter is `space-4` on phones.
+
+#### Minimal variant
+
+An app with a single workspace or fewer than three destinations (a canvas, a visualizer, a one-screen tool) does not need a sidebar and a tab bar. Set `data-shell="minimal"` on `ui-shell` and give it a `ui-topbar` before `ui-main`.
+
+- The top bar is sticky and 52 px tall at every width. It holds the app mark and name on the left as `ui-topbar__brand`, an optional `ui-topbar__nav` of up to two `ui-nav-item` links, and `ui-topbar__actions` on the right.
+- `ui-sidebar` and `ui-tabbar` are hidden in this variant, so leave them out of the markup.
+- Add `ui-main--bleed` to `ui-main` for a full-bleed canvas. It removes all padding, so the content draws to the edges.
+- Everything else is unchanged: tokens, the focus ring, touch targets and the page-title pattern.
+- An app that wants a collapsible rail builds it in its own `app.css` from the tokens. The kit does not ship one yet.
 
 ### Button
 
@@ -125,16 +140,20 @@ Height is `touch-phone` below 640 px and `touch-desktop` above. Do not set a hei
 
 ### Field
 
-A labelled text input with a help line beneath it.
+A labelled form control with a help line beneath it, for text, long text, choices and toggles.
 
-You provide the label text, the input, and the help line. Give the input an `id` and point the label's `for` at it.
+You provide the label text, the control, and the help line. Give every control an `id` and point its label's `for` at it. A control that has no visible label needs `aria-label`.
 
-- The label is an eyebrow: mono, uppercase, `text-muted`. It sits above the input, never inside it.
-- The input fill is `surface-sunken` and its border is `line-strong`, which holds 3:1 against the surface.
+- The label is an eyebrow: mono, uppercase, `text-muted`. It sits above the control, never inside it.
+- `ui-input`, `ui-textarea` and `ui-select` share one look: fill `surface-sunken`, border `line-strong` (3:1 against the surface), `radius-control`. Text is 16 px on phones so the browser does not zoom, 14 px from 640 px up.
+- `ui-textarea` is at least 96 px tall and resizes vertically.
+- `ui-select` is a native select. Wrap it in `ui-select-wrap` with a chevron `svg` after it, so the arrow looks the same in every browser. A choice of three or fewer is a segmented control, not a select.
+- `ui-check` wraps a checkbox and its text in a label. The whole row is the tap target. The tick inside the box is the state.
+- `ui-switch` wraps `<input type="checkbox" role="switch">` and its text, and always ends with `<span class="ui-switch__state">On</span>` or `Off`. The word and the thumb position carry the state, the accent fill supports them. Use it for a setting that takes effect at once. Use a checkbox when the person submits a form.
+- `ui-segmented` is `role="radiogroup"` with `aria-label`. Each option is a `ui-segmented__opt` button with `role="radio"` and `aria-checked`, and holds a check `svg` that shows only on the chosen one. Arrow keys move and choose. Use it for two to four short options.
 - A missing value shows a placeholder in `text-faint` that says so ("Not known yet"). Never prefill a guess.
 - The help line carries save status ("Saving…", "Saved · just now", "Couldn't save · Try again") or a hint.
-- An invalid field sets `aria-invalid="true"` and the help line switches to `ui-help--bad` with words that say how to fix it. The red border is never the only signal.
-- Input text is 16 px on phones so the browser does not zoom, 14 px from 640 px up.
+- An invalid control sets `aria-invalid="true"` and `aria-describedby` pointing at a `ui-help ui-help--bad` line that says how to fix it. The red border is never the only signal.
 
 ### Pill
 
@@ -144,8 +163,9 @@ You provide the words and, for a state, its icon.
 
 - `ui-pill`: neutral facts such as a media type.
 - `ui-pill ui-pill--mid`: the app's own states that are neither good nor bad. This is the mid-tone at work.
+- `ui-pill ui-pill--active`: a filter pill or chip that is switched on. It uses an accent border and tint, always carries a check icon, and sets `aria-pressed="true"` when it is a button.
 - `ui-pill--good`, `ui-pill--warn`, `ui-pill--bad`: state. Each one always carries a word and an icon, so the colour is never the only signal.
-- Never use `accent` for a pill. The accent means "this app" and "act here", not a state.
+- Only the active filter pill uses `accent`. No state pill does: the accent means "this app" and "act here", not a state.
 
 Define each app's states once, in one map of label, icon and tone, and render every pill from it.
 
@@ -210,80 +230,30 @@ You provide the trigger, the content, and the behaviour: open on hover for a fin
 - This is where explanations go. Keep them off button labels and out of placeholder text.
 - A tooltip is the smallest popover: the name of an icon-only control, shown on hover and focus, and for 1.5 seconds after a touch.
 
-## Adopting it in a project
+## Component markup quick-reference
 
-The system is a starting kit, not a gate. Nothing in the harness checks a project against it.
+Set `data-accent` and `data-density` once on `<html>`, for example `<html data-accent="azure" data-density="comfortable">`. Every component inherits them. The attributes below are the ones each component needs on its own markup. Guidelines for each component sit beside its preview.
 
-### A new project
-
-1. Serve `.harness/design-system/tokens.css` and `.harness/design-system/ui.css`, or copy their text into the app's stylesheet module when the app cannot read files at run time. A copy carries a comment naming this folder as its source.
-2. Set `data-accent` on `<html>` to the app's signature hue. Pick one at least 40° from the other apps.
-3. Load Newsreader and JetBrains Mono.
-4. Write `docs/design-profile.md`: the accent, the density preset, the voice warmth, the app's states (label, icon and tone for each), and any default the app departs from, with its reason.
-5. Build the first screen from AppShell, Button and Field. Add other components when a change needs them.
-
-### An existing project
-
-Adopt on touch. When a change opens a screen, move that screen onto the tokens and the shared components in the same change. No migration project is needed.
-
-### What stays free
-
-- Content layouts: tables, card grids, timelines, whatever the data wants.
-- App-only components. Build them from the tokens, and offer them back when a second app needs the same thing.
-- Celebrations and warmth, set in the profile.
-- A theme or accent picker. The system supports one and does not require it.
-
-### What a profile may not change
-
-The six floor rules at the top of the README.
-
-### Current signature hues
-
-| App | Hue today | Note |
-| --- | --- | --- |
-| LiveArchive | Violet | Keeps `neon-violet`. |
-| Job Application Tracker | Indigo | 16° from violet. Too close to read as a different app. Azure or cyan would separate it. |
-| Media Recommendation | Blue | Maps to `neon-azure`, unless Job Tracker takes it. |
-
-## Appendix: product principles
-
-These sit behind the visual rules. They are defaults, ranked: when two conflict, the earlier one wins. An app may reorder them in its profile.
-
-1. **Never guess.** Missing data stays missing and is labelled. No default dates, ratings or places. Empty is a valid answer.
-2. **Capture beats completeness.** Saving never waits on a network call, research or a slow step.
-3. **Your word wins.** The app suggests and never overwrites what the person typed. A suggestion applies only on a tap.
-4. **Slow and costly work runs separately.** Enrichment, research and AI calls start on an explicit press or a schedule, on data already saved. A failure there never undoes the save.
-5. **Flag, don't block.** Duplicates and incomplete captures get a warning and a choice.
-6. **Fewest steps in, structure out.** One line, one paste or one click captures. New fields go on the detail view.
-7. **Reversible by default.** Act at once and offer Undo. Ask first only when it cannot be undone.
-8. **Calm by default.** Neutral surfaces carry almost everything. Colour is reserved for meaning.
-9. **Meaning survives any theme.** State never depends on the accent, on light or dark, or on colour alone.
-10. **Delight from small, reliable moments.** No extra screens, no demo data.
-
-Three more fit apps that mix sourced facts with a personal log. Adopt them by name.
-
-- **Every fact has a source.** Each value can show where it came from.
-- **The world and you are separate.** Shared facts and the personal log are stored and shown apart.
-- **No hardcoded knowledge.** No lists of real-world names in code.
-
-## Appendix: voice
-
-Every app is plain, specific and honest. Warmth is the one thing that varies.
-
-1. Speak to the person as "you", and about their things as "your".
-2. Say what happened in their terms. "Saved as a new row" beats "Operation completed".
-3. Ask when something is missing. "When was it?" beats "Date required".
-4. Be honest about absence, without apology. "No source listed a lineup. Add the acts you saw below."
-5. Errors say what failed and offer the retry. "Couldn't save · Try again". No "Oops", no "Sorry".
-6. Name actions by what they do, in sentence case. Never "OK" or "Submit".
-7. Keep labels short. Explanations go in a Popover.
-8. Claim only what the app can back up.
-
-Avoid praise for ordinary actions, filler ("Just", "Simply"), cute errors, emoji and hype.
-
-| Warmth | Character | Exclamation marks | Celebrations |
+| Component | Root class | Variants and parts | Required attributes |
 | --- | --- | --- | --- |
-| Plain | A capable assistant handing you a filled-in form | None | None |
-| Warm | A friend who was there with you | Earned milestones only | Brief, and skipped under reduced motion |
+| AppShell | `ui-shell` | `data-shell="minimal"` with `ui-topbar`; parts `ui-sidebar`, `ui-main` (`ui-main--bleed`), `ui-tabbar`, `ui-nav-item`, `ui-tab` | `aria-current="page"` on the current destination, in the sidebar and the tab bar alike |
+| Button | `ui-btn` | `--primary`, `--ghost`, `--danger`; `ui-icon-btn` (`--dismiss`); `ui-link` | `type="button"`; an icon-only control needs `aria-label` and `title` |
+| Dialog | `ui-scrim` around `ui-dialog` | parts `__head`, `__title`, `__body`, `__foot` | `role="dialog"` or `"alertdialog"`, `aria-modal="true"`, `aria-labelledby` |
+| Field | `ui-field` | `ui-input`, `ui-textarea`, `ui-select` in `ui-select-wrap`, `ui-check`, `ui-switch`, `ui-segmented`; `ui-help` (`--bad`) | label `for` matches input `id`; invalid sets `aria-invalid="true"` and `aria-describedby`; a switch sets `role="switch"` and shows On or Off in `ui-switch__state`; a segmented control is `role="radiogroup"` with `role="radio"` and `aria-checked` options |
+| Menu | `ui-menu` | `ui-menu-item`, `ui-menu-item__hint`, `ui-menu__rule` | trigger has `aria-haspopup` and `aria-expanded`; list is `role="listbox"`, rows `role="option"` with `aria-selected` |
+| Notice | `ui-notice` | `--good`, `--warn`, `--bad`; part `__body`, `__actions` | `role="alert"` for warn and bad, `role="status"` for the rest |
+| Pill | `ui-pill` | `--mid`, `--active`, `--good`, `--warn`, `--bad` | a word, and an icon on every state pill |
+| Popover | `ui-popover` | none | `role="dialog"` and `aria-label`; trigger has `aria-expanded` |
+| Toast | `ui-toast` inside `ui-toasts` | parts `__msg`, `__action` | `ui-toasts` is `aria-live="polite"`; each toast is `role="status"` |
 
-Warm adds to the rules above and never loosens them.
+## Core rules, condensed
+
+The full text is in `principles.md` and `voice.md`. Read those two before writing a screen.
+
+- Never guess: missing data stays missing and says so. Your word wins: suggest, never overwrite.
+- Capture beats completeness: saving never waits on a slow step. Slow work runs on a press or a schedule, on saved data.
+- Flag, don't block: warn, and give a way forward. Reversible acts happen at once with Undo.
+- Calm by default: neutrals carry the screen, colour is for meaning, and meaning never depends on colour alone.
+- Speak to the person as "you". Say what happened in their terms. Ask when something is missing.
+- Errors say what failed and offer the retry. No "Oops", no "Sorry".
+- Name actions by what they do, in sentence case. Never "OK" or "Submit".
