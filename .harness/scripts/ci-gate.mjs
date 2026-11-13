@@ -85,6 +85,10 @@ export function checkPullRequest({ base, head, cwd = process.cwd() }) {
     if (versionBump) notes.push('package.json version bump allowed in an engine sync PR.');
     return { problems, warnings, notes };
   }
+  if (changedFiles.length > 0 && changedFiles.every((f) => isDocFile(f) || isSyncFile(f))) {
+    notes.push('Docs-only PR: no slice or Referee trailer needed.');
+    return { problems, warnings, notes };
+  }
   const progressDiff = git(['diff', '-U0', `${base}...${head}`, '--', '.spec/PROGRESS.md'], cwd);
   if (addedSliceLines(progressDiff).length === 0) {
     warnings.push('Not in a slice: this PR adds no `- [x] **Slice N` line to .spec/PROGRESS.md. Attach it to a slice by adding one, or finish a slice with finish-slice.mjs. The PR is allowed to merge without one.');
@@ -105,7 +109,13 @@ export function checkPullRequest({ base, head, cwd = process.cwd() }) {
 
 const SPEC_FILE = /^\.spec\//;
 const ENGINE_FILE = /^(\.harness\/|\.claude\/|\.harness-version$|AGENTS\.md$|plugins\/harness\/)/;
-const SYNC_SUBJECT = /^(chore\(harness\): sync|Sync harness engine)/;
+const DOC_FILE = /(^docs\/|\.md$)/;
+
+// True for documentation: anything under docs/ or any Markdown file. A docs-only PR needs no Referee trailer.
+export function isDocFile(file) {
+  return DOC_FILE.test(String(file));
+}
+const SYNC_SUBJECT =/^(chore\(harness\): sync|Sync harness engine)/;
 
 // True for commits that need no Referee trailer: sync subjects, commits with no changed files,
 // and commits whose files are all under .spec/ or are engine sync files.

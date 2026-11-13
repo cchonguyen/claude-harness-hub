@@ -59,7 +59,7 @@ Slice colour tags: `[UI / VISUAL]` needs typecheck only. `[CORE / DATA]` needs t
 - Auto-merge standing rule (applies to every project through the harness plugin): when a pull request is green (all required checks passing, not a draft) and the operator has already approved the work, merge it automatically without waiting for a click. Ask only if the work is not approved, checks are red or missing, or the merge would revert or overwrite something the operator has not approved.
 - Before asking the operator who merged a pull request, check the merge record on GitHub (merger and merge time). Ask only when the record does not show it. Never ask about a merge the operator has already made.
 - Put the typecheck, lint and test results in the pull request description.
-- The `Harness slice gate` check must pass. It needs a slice line in `.spec/PROGRESS.md` and a head commit with Referee trailers. A quick fix or a vibe-mode change will show red, by design.
+- The `Harness slice gate` check must pass. It needs a slice line in `.spec/PROGRESS.md` and a head commit with Referee trailers. A quick fix or a vibe-mode change will show red, by design. A docs-only PR (every file Markdown, under `docs/`, or under `.spec/`) passes without a slice or trailer.
 - Use the pull request template if the repo has one.
 - A plan file in `.spec/plans/` is the operator's approval for the slices it lists. Merging it accepts them (see `.spec/plans/README.md`). No per-slice accept step is needed.
 - Slice-sized work gets one pull request. Do not split same-file or same-actor work across pull requests (standing rule, Charlie).

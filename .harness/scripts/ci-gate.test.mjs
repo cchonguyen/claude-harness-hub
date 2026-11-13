@@ -96,6 +96,29 @@ test('checkPullRequest fails when the head commit has no Referee trailer', () =>
   assert.ok(problems.some((p) => /No Referee trailer/.test(p)));
 });
 
+test('checkPullRequest passes a docs-only PR with no Referee trailer', () => {
+  const dir = makeRepo();
+  fs.mkdirSync(path.join(dir, 'docs'));
+  fs.writeFileSync(path.join(dir, 'docs', 'plan.md'), '# Plan\n');
+  fs.writeFileSync(path.join(dir, 'docs', 'diagram.svg'), '<svg/>\n');
+  fs.writeFileSync(path.join(dir, 'README.md'), '# Readme\n');
+  fs.writeFileSync(path.join(dir, '.spec', 'PROGRESS.md'), '- [ ] **Slice 1.1: First**\n- [ ] **Slice 1.2: Next**\n');
+  sh(dir, ['add', '-A']);
+  sh(dir, ['commit', '-q', '-m', 'Plan only']);
+  const r = checkPullRequest({ base: 'main', head: 'feature', cwd: dir });
+  assert.deepEqual(r, { problems: [], warnings: [], notes: ['Docs-only PR: no slice or Referee trailer needed.'] });
+});
+
+test('checkPullRequest still fails docs plus a source file with no Referee trailer', () => {
+  const dir = makeRepo();
+  fs.writeFileSync(path.join(dir, 'README.md'), '# Readme\n');
+  fs.writeFileSync(path.join(dir, 'app.txt'), 'v2\n');
+  sh(dir, ['add', '-A']);
+  sh(dir, ['commit', '-q', '-m', 'Docs and code']);
+  const { problems } = checkPullRequest({ base: 'main', head: 'feature', cwd: dir });
+  assert.ok(problems.some((p) => /No Referee trailer/.test(p)));
+});
+
 test('checkPullRequest fails when the commit changed after its verdict', () => {
   const dir = makeRepo();
   fs.writeFileSync(path.join(dir, 'app.txt'), 'v2\n');
