@@ -6,42 +6,128 @@
 <title>Harness status</title>
 <style>
 :root {
-  --bg: #f6f7f9;
-  --fg: #1d2228;
-  --muted: #5b6470;
-  --card: #ffffff;
-  --border: #d8dde3;
-  --accent: #2456a6;
-  --ok: #1c7a3c;
-  --bad: #b3261e;
-  --warn: #8a5a00;
-  --banner-bg: #fde8e7;
-  --banner-fg: #7a1410;
-  --strip-bg: #fff4d6;
-  --strip-fg: #5c3d00;
+  color-scheme: dark;
+  --bg: #0f0f12;
+  --surface: #17171b;
+  --surface-raised: #1f1f25;
+  --surface-sunken: #0a0a0c;
+  --line: #2a2a32;
+  --line-strong: #70707b;
+  --text: #ececf1;
+  --text-muted: #a1a1aa;
+  --text-faint: #85858f;
+  --mid: #2a2640;
+  --mid-line: #4a4273;
+  --mid-text: #c3baf0;
+  --neon-violet: #aa89fc;
+  --neon-magenta: #ff7ad9;
+  --neon-azure: #67aafe;
+  --neon-cyan: #4fd8eb;
+  --neon-lime: #b6f23c;
+  --accent: var(--neon-azure);
+  --accent-tint: #14233a;
+  --on-accent: #0f172a;
+  --good: #34d3a6;
+  --good-tint: #0f2a22;
+  --warn: #fbbf24;
+  --warn-tint: #2c2210;
+  --bad: #ff7a8a;
+  --bad-tint: #30151b;
 }
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0f1216;
-    --fg: #e6e9ee;
-    --muted: #9aa4b1;
-    --card: #181d24;
-    --border: #2c3440;
-    --accent: #8ab4ff;
-    --ok: #6fd08c;
-    --bad: #ff8a80;
-    --warn: #f0c060;
-    --banner-bg: #3a1614;
-    --banner-fg: #ffd7d3;
-    --strip-bg: #332a12;
-    --strip-fg: #f5e3b0;
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    color-scheme: light;
+    --bg: #fafafa;
+    --surface: #ffffff;
+    --surface-raised: #ffffff;
+    --surface-sunken: #f1f1f3;
+    --line: #e4e4e7;
+    --line-strong: #85858f;
+    --text: #18181b;
+    --text-muted: #52525b;
+    --text-faint: #6b6b76;
+    --mid: #eceaf8;
+    --mid-line: #cdc7ec;
+    --mid-text: #453a8f;
+    --neon-violet: #7433cb;
+    --neon-magenta: #b0188a;
+    --neon-azure: #0063cd;
+    --neon-cyan: #0b7285;
+    --neon-lime: #4d7c0f;
+    --accent: var(--neon-azure);
+    --accent-tint: #edf4fe;
+    --on-accent: #ffffff;
+    --good: #0b7a5c;
+    --good-tint: #e4f6ef;
+    --warn: #8a4b08;
+    --warn-tint: #fdf2d5;
+    --bad: #c01540;
+    --bad-tint: #fde7eb;
   }
+}
+[data-theme="light"] {
+  color-scheme: light;
+  --bg: #fafafa;
+  --surface: #ffffff;
+  --surface-raised: #ffffff;
+  --surface-sunken: #f1f1f3;
+  --line: #e4e4e7;
+  --line-strong: #85858f;
+  --text: #18181b;
+  --text-muted: #52525b;
+  --text-faint: #6b6b76;
+  --mid: #eceaf8;
+  --mid-line: #cdc7ec;
+  --mid-text: #453a8f;
+  --neon-violet: #7433cb;
+  --neon-magenta: #b0188a;
+  --neon-azure: #0063cd;
+  --neon-cyan: #0b7285;
+  --neon-lime: #4d7c0f;
+  --accent: var(--neon-azure);
+  --accent-tint: #edf4fe;
+  --on-accent: #ffffff;
+  --good: #0b7a5c;
+  --good-tint: #e4f6ef;
+  --warn: #8a4b08;
+  --warn-tint: #fdf2d5;
+  --bad: #c01540;
+  --bad-tint: #fde7eb;
+}
+[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0f0f12;
+  --surface: #17171b;
+  --surface-raised: #1f1f25;
+  --surface-sunken: #0a0a0c;
+  --line: #2a2a32;
+  --line-strong: #70707b;
+  --text: #ececf1;
+  --text-muted: #a1a1aa;
+  --text-faint: #85858f;
+  --mid: #2a2640;
+  --mid-line: #4a4273;
+  --mid-text: #c3baf0;
+  --neon-violet: #aa89fc;
+  --neon-magenta: #ff7ad9;
+  --neon-azure: #67aafe;
+  --neon-cyan: #4fd8eb;
+  --neon-lime: #b6f23c;
+  --accent: var(--neon-azure);
+  --accent-tint: #14233a;
+  --on-accent: #0f172a;
+  --good: #34d3a6;
+  --good-tint: #0f2a22;
+  --warn: #fbbf24;
+  --warn-tint: #2c2210;
+  --bad: #ff7a8a;
+  --bad-tint: #30151b;
 }
 * { box-sizing: border-box; }
 html, body { background: var(--bg); }
 body {
   margin: 0;
-  color: var(--fg);
+  color: var(--text);
   font: 16px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 main { padding: 16px; max-width: 760px; margin: 0 auto; }
@@ -49,18 +135,18 @@ h1 { font-size: 1.4rem; margin: 0 0 4px; }
 h2 { font-size: 1.1rem; margin: 24px 0 8px; }
 h3 { font-size: 1rem; margin: 0 0 4px; }
 a { color: var(--accent); }
-.muted { color: var(--muted); font-size: 0.9rem; }
+.muted { color: var(--text-muted); font-size: 0.9rem; }
 .banner, .strip {
   border-radius: 8px;
   padding: 12px 16px;
   margin: 12px 0;
 }
-.banner { background: var(--banner-bg); color: var(--banner-fg); }
-.strip { background: var(--strip-bg); color: var(--strip-fg); }
+.banner { background: var(--bad-tint); color: var(--bad); }
+.strip { background: var(--warn-tint); color: var(--warn); }
 .hidden { display: none; }
 .card {
-  background: var(--card);
-  border: 1px solid var(--border);
+  background: var(--surface);
+  border: 1px solid var(--line);
   border-radius: 8px;
   padding: 12px 16px;
   margin: 8px 0;
@@ -68,17 +154,17 @@ a { color: var(--accent); }
 .line { margin: 2px 0; font-size: 0.92rem; }
 .checks { margin: 6px 0 0; padding: 0; list-style: none; font-size: 0.9rem; }
 .checks li { display: inline-block; margin: 2px 10px 2px 0; }
-.ok { color: var(--ok); }
+.ok { color: var(--good); }
 .bad { color: var(--bad); }
 .warn { color: var(--warn); }
 .foot {
-  color: var(--muted);
+  color: var(--text-muted);
   font-size: 0.8rem;
   margin-top: 8px;
   padding-top: 6px;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--line);
 }
-.empty { color: var(--muted); font-size: 0.92rem; margin: 6px 0; }
+.empty { color: var(--text-muted); font-size: 0.92rem; margin: 6px 0; }
 .strip ul { margin: 6px 0 0; padding-left: 20px; }
 </style>
 </head>

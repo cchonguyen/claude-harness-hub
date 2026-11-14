@@ -467,7 +467,7 @@ export function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0A0D12] text-slate-100 flex flex-col font-sans selection:bg-amber-500/30 selection:text-amber-200">
+    <div className="min-h-screen bg-[#0A0D12] text-slate-100 flex flex-col font-sans selection:bg-indigo-500/30 selection:text-indigo-200">
       {/* Top Navbar */}
       <header className="border-b border-slate-800/80 bg-[#0D1117]/90 backdrop-blur-md sticky top-0 z-30">
         <div className="max-w-[1600px] mx-auto px-3 sm:px-6 py-2.5 min-h-16 flex flex-wrap items-center justify-between gap-3">
@@ -583,7 +583,7 @@ export function App() {
                 <span>{item.label}</span>
                 {item.badge && (
                   <span
-                    className={`text-[10px] font-mono px-1.5 py-0.2 rounded ${
+                    className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
                       active
                         ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
                         : 'bg-slate-800/80 text-slate-400'

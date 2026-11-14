@@ -161,7 +161,7 @@ Source: Operator RFC, Antigravity adversarial review, and Claude architectural r
    - Goal: Leave behind self-contained contracts and atomic (`<5` target files), risk-tagged slices in `.spec/PROGRESS.md` so implementation requires zero long-horizon memory.
 2. **The Goldfish (Stateless Implementation & Review):**
    - Handles all day-to-day slice implementation, unit testing, PR scope reviews, and debugging.
-   - Runs on Haiku baseline (`engineer`, `auditor`, `clerk`), Gemini Flash/Pro in Antigravity/AI Studio, or Sonnet (`engineer-sonnet`) when escalated.
+   - Runs on Haiku baseline (`engineer`, `auditor`, `clerk`), Hydrogen (inherit) / Gemini Pro in Antigravity/AI Studio, or Sonnet (`engineer-sonnet`) when escalated.
    - **Hard Rule: Opus is never used for Goldfish work.**
 3. **Dispatch Sizing & Mechanical Guard:**
    - Guard 0 in `pre-tool-guard.mjs` mechanically verifies subagent dispatch against `.spec/SCOUT.md`: `architect-opus` is blocked unless `SCOUT.md` specifies Level 3, and `engineer-sonnet` is blocked unless `SCOUT.md` specifies Level 2 or 3.
