@@ -48,7 +48,7 @@ export default function CommandsTab({
                     {cmd.name}
                   </span>
                   {cmd.disableModelInvocation && (
-                    <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-slate-950 border border-slate-700 text-slate-400 shrink-0">
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-950 border border-slate-700 text-slate-400 shrink-0">
                       Zero Token
                     </span>
                   )}

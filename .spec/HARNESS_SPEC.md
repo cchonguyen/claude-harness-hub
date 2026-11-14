@@ -155,7 +155,7 @@ The warning text is written to the hook's stderr. Claude Code does not show stde
 | `harness:gf-clerk` | haiku | Read, Edit, Write, Bash | same | Yes |
 | `architect`, `architect-opus`, `engineer`, `engineer-sonnet`, `auditor`, `clerk`, `discovery` | sonnet/opus/haiku | various | `.claude/agents/` only | No (legacy v3.1 names) |
 
-The same five `el-`/`gf-` definitions exist in four places: `plugins/harness/agents/`, `.claude/agents/`, `.harness/agents/` (plus `runtime-payloads.json` for Antigravity) and `.agents/`. Only the plugin copy matters in threads, and the copies have drifted (`plugins/harness/agents/gf-coder.md` is 1783 bytes; the others are 1300).
+The same five `el-`/`gf-` definitions exist in four places: `plugins/harness/agents/`, `.claude/agents/`, `.harness/agents/` (plus `runtime-payloads.json` for Antigravity) and `.agents/`. Only the plugin copy matters in threads, and the copies have drifted (`plugins/harness/agents/gf-coder.md` is 1783 bytes; the others are 1300). For Antigravity `invoke_subagent`, `hub-sync.mjs` compiles `runtime-payloads.json` with `antigravity_model` mapped to `Hydrogen (inherit)` (`"inherit"`) for all Tier 3 `gf-*` (`haiku`) agents and `"pro"` for `el-architect` (`opus`).
 
 The **main thread's model is not controlled by the harness**. `.claude/settings.json` sets `"model": "haiku"`, which does not load in threads. The thread runs whatever model the coordinator or operator picked (this audit runs on Opus by the operator's request; all 5 Nov threads ran Haiku). Routing to cheaper models therefore happens only when the main thread chooses to dispatch a subagent. `CLAUDE.md` instructs that dispatch; the fast-path budget used to force it and now only warns.
 
