@@ -1,0 +1,84 @@
+# Harness gate: the one PR check every repo calls. Spokes reference it as a reusable workflow at @main,
+# so CI runs one version everywhere. It links a missing issue (opening one when needed), then runs the
+# gate (duplicate slice ids, issue link). It does not check Referee trailers.
+# Required check name: "Harness gate / Harness gate".
+name: Harness gate
+
+on:
+  workflow_call:
+    inputs:
+      verify:
+        description: Optional shell command the caller wants run after the gate (empty means none).
+        type: string
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  gate:
+    name: Harness gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the PR head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Check out the harness hub
+        uses: actions/checkout@v4
+        with:
+          repository: cchonguyen/claude-harness-hub
+          ref: main
+          path: .harness-hub
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Write the PR body to a file
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: printf '%s' "$PR_BODY" > "$RUNNER_TEMP/body.md"
+
+      - name: Link an issue when missing
+        if: ${{ !contains(github.event.pull_request.labels.*.name, 'migration') && !contains(github.event.pull_request.labels.*.name, 'harness:bypass') }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          REPO: ${{ github.repository }}
+        run: |
+          BODY_FILE="$RUNNER_TEMP/body.md"
+          if node .harness-hub/.harness/scripts/ci-gate.mjs has-issue "$BODY_FILE"; then
+            echo "PR already links an issue."
+            exit 0
+          fi
+          ISSUE_TEXT="Opened by the harness gate for PR #$PR_NUMBER, which linked no issue."
+          NEW_URL=$(gh issue create --repo "$REPO" --title "$PR_TITLE" --body "$ISSUE_TEXT" --label slice 2>/dev/null) \
+            || NEW_URL=$(gh issue create --repo "$REPO" --title "$PR_TITLE" --body "$ISSUE_TEXT")
+          if [ -z "$NEW_URL" ]; then
+            echo "Could not open an issue for PR #$PR_NUMBER."
+            exit 1
+          fi
+          ISSUE_NUM="${NEW_URL##*/}"
+          printf '\n\nCloses #%s\n' "$ISSUE_NUM" >> "$BODY_FILE"
+          gh pr edit "$PR_NUMBER" --repo "$REPO" --body-file "$BODY_FILE"
+          echo "Opened issue #$ISSUE_NUM and linked it to PR #$PR_NUMBER."
+
+      - name: Gate
+        env:
+          PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+        run: |
+          node .harness-hub/.harness/scripts/ci-gate.mjs gate --body-file "$RUNNER_TEMP/body.md" --labels "$PR_LABELS" --progress .spec/PROGRESS.md
+
+      - name: Verify
+        if: ${{ inputs.verify != '' }}
+        env:
+          VERIFY_CMD: ${{ inputs.verify }}
+        run: bash -c "$VERIFY_CMD"
