@@ -9,6 +9,7 @@
 // so the hook blocks at most once per stop attempt and cannot loop.
 import fs from 'node:fs';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { resolveRoot } from './lib/vibe.mjs';
 
@@ -49,11 +50,46 @@ export function stopDecision({ root, env = {}, payload = {} } = {}) {
   }
 }
 
-const main = () => {
+// Baseline telemetry (slice 19.3): writes <root>/.spec/.events/receipt-<sessionId>.json from the session
+// transcript. Never throws and never changes the stop decision or stdout. Returns the file path, or ''.
+export async function writeStopReceipt({ root, payload = {} } = {}) {
+  try {
+    const transcriptPath = typeof payload.transcript_path === 'string' ? payload.transcript_path : '';
+    if (!transcriptPath) return '';
+    fs.accessSync(transcriptPath, fs.constants.R_OK);
+    const { buildReceipt } = await import('../scripts/receipt.mjs');
+    const transcript = fs.readFileSync(transcriptPath, 'utf8');
+    const git = (args) => {
+      try {
+        return execFileSync('git', args, { cwd: String(root || ''), encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+      } catch {
+        return '';
+      }
+    };
+    let progress = '';
+    try { progress = fs.readFileSync(path.join(String(root || ''), '.spec', 'PROGRESS.md'), 'utf8'); } catch { progress = ''; }
+    const sessionId = String(payload.session_id || '').replace(/[^A-Za-z0-9_-]/g, '') || 'unknown';
+    const receipt = buildReceipt(transcript, {
+      slice: inProgressSliceId(progress),
+      branch: git(['rev-parse', '--abbrev-ref', 'HEAD']),
+      head: git(['rev-parse', 'HEAD']),
+    });
+    const dir = path.join(String(root || ''), '.spec', '.events');
+    fs.mkdirSync(dir, { recursive: true });
+    const file = path.join(dir, `receipt-${sessionId}.json`);
+    fs.writeFileSync(file, JSON.stringify(receipt, null, 2) + '\n');
+    return file;
+  } catch {
+    return '';
+  }
+}
+
+const main = async () => {
   let payload = null;
   try { payload = JSON.parse(fs.readFileSync(0, 'utf8')); } catch { return; }
   if (!payload || typeof payload !== 'object') return;
   const root = (typeof payload.cwd === 'string' && payload.cwd) || process.env.CLAUDE_PROJECT_DIR || resolveRoot();
+  await writeStopReceipt({ root, payload });
   const reason = stopDecision({ root, env: process.env, payload });
   if (reason) process.stdout.write(JSON.stringify({ decision: 'block', reason }) + '\n');
 };
@@ -61,8 +97,7 @@ const main = () => {
 // Run only when executed directly, so tests can import stopDecision without touching stdin.
 const isDirectRun = process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
 if (isDirectRun) {
-  try { main(); } catch {
+  main().catch(() => {
     // A Stop hook must never break the turn. Allow the stop on any failure.
-  }
-  process.exit(0);
+  }).finally(() => process.exit(0));
 }
