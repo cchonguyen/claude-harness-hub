@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-// Stop hook (stall prevention, slice 10.5). Blocks ending a turn while an approved plan still has
-// unfinished slices in .spec/PROGRESS.md, unless one of two escapes is set:
+// Stop hook (stall prevention, slice 10.5, narrowed in slice 19.1). Blocks ending a turn only while the
+// working-tree .spec/PROGRESS.md has an [IN_PROGRESS] slice line (the slice in progress on this branch).
+// Pending `- [ ]` lines alone never block, so unmerged plans do not stall every thread. Escapes:
 //   - CLAUDE_WAKE_SCHEDULED=1       a wake-up is scheduled for this session (no harness file records this yet)
 //   - CLAUDE_PR_SUBSCRIBED=1        this session is subscribed to a PR (no harness marker file exists yet)
 // Output: {"decision":"block","reason":"..."} on stdout when blocking; nothing and exit 0 when allowing.
@@ -11,10 +12,19 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolveRoot } from './lib/vibe.mjs';
 
-const UNFINISHED = /^\s*-\s*\[[ ]\]|\[IN_PROGRESS\]/m;
+const IN_PROGRESS_LINE = /^\s*-\s*\[[ x]\].*\[IN_PROGRESS\]/m;
+const SLICE_ID = /\*\*Slice\s+([^:*]+):/;
 
-export function hasUnfinishedSlice(progressText = '') {
-  return UNFINISHED.test(String(progressText));
+// True when a slice line in the progress text is marked [IN_PROGRESS]. Pending `- [ ]` lines do not count.
+export function hasInProgressSlice(progressText = '') {
+  return IN_PROGRESS_LINE.test(String(progressText));
+}
+
+// The id of the first [IN_PROGRESS] slice line, or '' when there is none.
+export function inProgressSliceId(progressText = '') {
+  const line = String(progressText).split('\n').find((text) => IN_PROGRESS_LINE.test(text));
+  const match = line ? SLICE_ID.exec(line) : null;
+  return match ? match[1].trim() : '';
 }
 
 export function escapeReason(env = {}) {
@@ -29,9 +39,11 @@ export function stopDecision({ root, env = {}, payload = {} } = {}) {
     if (payload && payload.stop_hook_active === true) return '';
     const progressPath = path.join(String(root || ''), '.spec', 'PROGRESS.md');
     if (!fs.existsSync(progressPath)) return '';
-    if (!hasUnfinishedSlice(fs.readFileSync(progressPath, 'utf8'))) return '';
+    const progress = fs.readFileSync(progressPath, 'utf8');
+    if (!hasInProgressSlice(progress)) return '';
     if (escapeReason(env)) return '';
-    return 'An approved plan has unfinished slices in .spec/PROGRESS.md. Finish the slice or schedule a wake-up before stopping.';
+    const id = inProgressSliceId(progress) || '(unnamed)';
+    return `Slice ${id} is still [IN_PROGRESS] in .spec/PROGRESS.md. Finish it with finish-slice.mjs or schedule a wake-up before stopping.`;
   } catch {
     return '';
   }
