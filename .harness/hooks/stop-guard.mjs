@@ -46,17 +46,50 @@ const resultText = (content) => {
   return content.filter((b) => b && b.type === 'text' && typeof b.text === 'string').map((b) => b.text).join('\n');
 };
 
+// A raw transcript line that carries a pull_request.closed event (the event text is escaped inside JSON strings).
+// Scanned on the raw line, before JSON parsing.
+const CLOSED_EVENT = /pull_request\.closed[\s\S]{0,400}?#(\d+)/g;
+const READ_TOOLS = ['pull_request_read', 'list_pull_requests'];
+const MAX_DEPTH = 6;
+
+// Adds the PR numbers in a parsed GitHub result that show closed or merged. An object with no numeric number
+// that shows closed takes the pullNumber the read was called with (fallback). Depth-limited. Never throws.
+function collectClosed(value, fallback, out, depth = 0) {
+  if (depth > MAX_DEPTH || !value || typeof value !== 'object') return;
+  if (Array.isArray(value)) {
+    for (const item of value) collectClosed(item, fallback, out, depth + 1);
+    return;
+  }
+  const isClosed = value.state === 'closed' || value.merged === true || Boolean(value.merged_at);
+  if (typeof value.number === 'number') {
+    if (isClosed) out.add(value.number);
+    return;
+  }
+  if (isClosed && Number.isFinite(fallback)) {
+    out.add(fallback);
+    return;
+  }
+  for (const child of Object.values(value)) collectClosed(child, fallback, out, depth + 1);
+}
+
 // PR numbers opened in the transcript and never given a wake (slice 19.196). Walks the JSONL in order:
 // create_pull_request opens a PR (number read from its result's /pull/<n> URL); subscribe_pr_activity or
 // merge_pull_request with that pullNumber watches it; send_later, create_trigger or ScheduleWakeup watches
-// every PR opened before it. Returns sorted unique numbers, or [] on any problem. Never throws.
+// every PR opened before it. A PR the transcript shows closed or merged (closed event, update_pull_request
+// with state closed, unsubscribe_pr_activity, or a pull_request_read / list_pull_requests result) is settled
+// and not returned, whenever that close appears. Returns sorted unique numbers, or [] on any problem. Never throws.
 export function unwatchedPrs(transcriptText) {
   try {
     if (typeof transcriptText !== 'string' || !transcriptText) return [];
     const opened = new Map(); // PR number -> watched?
+    const closed = new Set(); // PR numbers the transcript shows closed or merged, at any point
     const pendingOpens = new Set(); // tool_use ids of create_pull_request calls awaiting a result
+    const pendingReads = new Map(); // tool_use id -> input of pull_request_read / list_pull_requests calls
+    const watchedAny = new Set(); // pullNumbers subscribed or merged at any point (parallel calls can precede the open's result)
+    const timerCovered = new Set(); // create_pull_request ids still awaiting a result when a timer was set
     for (const line of transcriptText.split('\n')) {
       if (!line.trim()) continue;
+      for (const match of line.matchAll(CLOSED_EVENT)) closed.add(Number(match[1]));
       let entry;
       try { entry = JSON.parse(line); } catch { continue; }
       const blocks = entry && entry.message && Array.isArray(entry.message.content) ? entry.message.content : [];
@@ -69,21 +102,37 @@ export function unwatchedPrs(transcriptText) {
             if (block.id) pendingOpens.add(block.id);
           } else if (endsWithTool(name, 'subscribe_pr_activity') || endsWithTool(name, 'merge_pull_request')) {
             const n = Number(input.pullNumber);
+            watchedAny.add(n);
             if (opened.has(n)) opened.set(n, true);
           } else if (endsWithTool(name, 'send_later') || endsWithTool(name, 'create_trigger') || endsWithTool(name, 'ScheduleWakeup')) {
             for (const n of opened.keys()) opened.set(n, true);
+            for (const id of pendingOpens) timerCovered.add(id);
+          } else if (endsWithTool(name, 'update_pull_request')) {
+            if (input.state === 'closed') closed.add(Number(input.pullNumber));
+          } else if (endsWithTool(name, 'unsubscribe_pr_activity')) {
+            closed.add(Number(input.pullNumber));
+          } else if (READ_TOOLS.some((tool) => endsWithTool(name, tool))) {
+            if (block.id) pendingReads.set(block.id, input);
           }
-        } else if (block.type === 'tool_result' && pendingOpens.has(block.tool_use_id)) {
-          pendingOpens.delete(block.tool_use_id);
-          const match = /\/pull\/(\d+)/.exec(resultText(block.content));
-          if (match) {
-            const n = Number(match[1]);
-            if (!opened.has(n)) opened.set(n, false);
+        } else if (block.type === 'tool_result') {
+          if (pendingOpens.has(block.tool_use_id)) {
+            pendingOpens.delete(block.tool_use_id);
+            const match = /\/pull\/(\d+)/.exec(resultText(block.content));
+            if (match) {
+              const n = Number(match[1]);
+              if (!opened.has(n)) opened.set(n, timerCovered.has(block.tool_use_id));
+            }
+          } else if (pendingReads.has(block.tool_use_id)) {
+            const input = pendingReads.get(block.tool_use_id);
+            pendingReads.delete(block.tool_use_id);
+            let parsed;
+            try { parsed = JSON.parse(resultText(block.content)); } catch { parsed = undefined; }
+            collectClosed(parsed, Number(input.pullNumber), closed);
           }
         }
       }
     }
-    return [...opened.entries()].filter(([, watched]) => !watched).map(([n]) => n).sort((a, b) => a - b);
+    return [...opened.entries()].filter(([n, watched]) => !watched && !watchedAny.has(n) && !closed.has(n)).map(([n]) => n).sort((a, b) => a - b);
   } catch {
     return [];
   }
@@ -97,7 +146,7 @@ const unwatchedPrReason = (transcriptPath) => {
     const nums = unwatchedPrs(fs.readFileSync(transcriptPath, 'utf8'));
     if (nums.length === 0) return '';
     const list = nums.map((n) => `#${n}`).join(', ');
-    return `PR ${list} was opened in this session, but nothing will wake you when its checks finish. Call subscribe_pr_activity for it now (or send_later to recheck in a few minutes). From that wake: merge when green, merge the base branch on a conflict, fix the cause on red.`;
+    return `PR ${list} was opened in this session, but nothing will wake you when its checks finish. Call subscribe_pr_activity for it now (or send_later to recheck in a few minutes). From that wake: merge when green, merge the base branch on a conflict, fix the cause on red. If it is already closed or merged, read it once with pull_request_read so this check sees that.`;
   } catch {
     return '';
   }

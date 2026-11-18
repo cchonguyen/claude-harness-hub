@@ -207,3 +207,89 @@ test('stopDecision: PR block respects the wake and PR-subscribed escapes', () =>
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
+
+// Closed or merged PRs are settled (slice 19.199).
+const closedEventLine = JSON.stringify({ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'z', content: '<event source="github" kind="pull_request.closed" from="system" trust="relay">\n {"outcome":"closed","pr":"acme/app#7"}\n</event>' }] } });
+
+test('unwatchedPrs: a closed event for the opened PR settles it', () => {
+  assert.deepEqual(unwatchedPrs(transcript(...openPr('a', 7), closedEventLine)), []);
+});
+
+test('unwatchedPrs: a closed event for a different PR does not settle this one', () => {
+  const otherClosed = closedEventLine.replace('acme/app#7', 'acme/app#8');
+  assert.deepEqual(unwatchedPrs(transcript(...openPr('a', 7), otherClosed)), [7]);
+});
+
+test('unwatchedPrs: update_pull_request with state closed settles the PR', () => {
+  assert.deepEqual(unwatchedPrs(transcript(...openPr('a', 7), toolUse('b', 'mcp__github__update_pull_request', { pullNumber: 7, state: 'closed' }))), []);
+});
+
+test('unwatchedPrs: update_pull_request without state (body edit) does not settle the PR', () => {
+  assert.deepEqual(unwatchedPrs(transcript(...openPr('a', 7), toolUse('b', 'mcp__github__update_pull_request', { pullNumber: 7, body: 'edited' }))), [7]);
+});
+
+test('unwatchedPrs: unsubscribe_pr_activity settles the PR', () => {
+  assert.deepEqual(unwatchedPrs(transcript(...openPr('a', 7), toolUse('b', 'mcp__github__unsubscribe_pr_activity', { pullNumber: 7 }))), []);
+});
+
+test('unwatchedPrs: pull_request_read result that is closed settles the PR', () => {
+  const text = transcript(...openPr('a', 7), toolUse('r', 'mcp__github__pull_request_read', { pullNumber: 7 }), toolResult('r', JSON.stringify({ number: 7, state: 'closed', merged: false })));
+  assert.deepEqual(unwatchedPrs(text), []);
+});
+
+test('unwatchedPrs: pull_request_read result that is open does not settle the PR', () => {
+  const text = transcript(...openPr('a', 7), toolUse('r', 'mcp__github__pull_request_read', { pullNumber: 7 }), toolResult('r', JSON.stringify({ number: 7, state: 'open', merged: false })));
+  assert.deepEqual(unwatchedPrs(text), [7]);
+});
+
+test('unwatchedPrs: list_pull_requests result containing a closed PR settles it', () => {
+  const text = transcript(...openPr('a', 7), toolUse('l', 'mcp__github__list_pull_requests', { owner: 'acme', repo: 'app' }), toolResult('l', JSON.stringify([{ number: 7, state: 'closed' }])));
+  assert.deepEqual(unwatchedPrs(text), []);
+});
+
+test('stopDecision: block reason tells the thread to read a closed PR with pull_request_read', () => {
+  const root = makeRoot(DONE_ONLY);
+  const transcriptPath = path.join(root, 'session.jsonl');
+  fs.writeFileSync(transcriptPath, transcript(...openPr('a', 42)));
+  try {
+    const reason = stopDecision({ root, env: {}, payload: { transcript_path: transcriptPath } });
+    assert.match(reason, /pull_request_read/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('unwatchedPrs: subscribe sent in parallel with the open (before its result) counts as watched', () => {
+  const text = transcript(
+    JSON.stringify({ type: 'assistant', message: { content: [
+      { type: 'tool_use', id: 'c', name: 'mcp__github__create_pull_request', input: {} },
+      { type: 'tool_use', id: 's', name: 'mcp__claude-code-remote__subscribe_pr_activity', input: { pullNumber: 200 } },
+    ] } }),
+    toolResult('c', [{ type: 'text', text: 'https://github.com/acme/app/pull/200' }]),
+    toolResult('s', 'Subscribed'),
+  );
+  assert.deepEqual(unwatchedPrs(text), []);
+});
+
+test('unwatchedPrs: send_later sent in parallel with the open counts as watched', () => {
+  const text = transcript(
+    JSON.stringify({ type: 'assistant', message: { content: [
+      { type: 'tool_use', id: 'c', name: 'mcp__github__create_pull_request', input: {} },
+      { type: 'tool_use', id: 'l', name: 'mcp__claude-code-remote__send_later', input: {} },
+    ] } }),
+    toolResult('c', [{ type: 'text', text: 'https://github.com/acme/app/pull/9' }]),
+  );
+  assert.deepEqual(unwatchedPrs(text), []);
+});
+
+test('unwatchedPrs: this session\'s real shape (subscribe beside create) is not flagged, but a later open still is', () => {
+  const text = transcript(
+    JSON.stringify({ type: 'assistant', message: { content: [
+      { type: 'tool_use', id: 'c', name: 'mcp__github__create_pull_request', input: {} },
+      { type: 'tool_use', id: 's', name: 'mcp__claude-code-remote__subscribe_pr_activity', input: { pullNumber: 5 } },
+    ] } }),
+    toolResult('c', [{ type: 'text', text: 'https://github.com/acme/app/pull/5' }]),
+    ...openPr('d', 6),
+  );
+  assert.deepEqual(unwatchedPrs(text), [6]);
+});
