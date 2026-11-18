@@ -9,6 +9,7 @@
 // is blocked too. It reads the session transcript at payload.transcript_path. Same escapes apply.
 // Third block (slice 19.201): a stop with checklist steps still open, or a stated next step ("Next is slice 3"),
 // and nothing after it that wakes the thread, is blocked too (see stalledPlan). Same escapes apply.
+// Fourth block (slice 19.203): a turn that posts a decision card and then only ends (see parkedOnDecision).
 // Output: {"decision":"block","reason":"..."} on stdout when blocking; nothing and exit 0 when allowing.
 // Never throws. Malformed stdin fails open (allows stop). A repeat stop (stop_hook_active) is allowed,
 // so the hook blocks at most once per stop attempt and cannot loop.
@@ -144,7 +145,8 @@ export function unwatchedPrs(transcriptText) {
 // steps open (or a stated next step) with nothing after it that wakes the thread. A PR subscription alone does
 // not count: a green check sometimes never wakes the thread. Returns '' (allow) or a block reason. Never throws.
 const CHECKLIST_TOOL = 'update_progress_checklist';
-const NEXT_STEP = /\b(next (is|up)|i'?ll (now )?(start|begin|move on|do|build|open|run)|starting (on )?|moving on to|now (starting|building|doing))\b/i;
+// Also a first-person future step (slice 19.203): "I'll check", "I’ll first check", "I will check", "Next I'll check", or a bare "Next, I'll".
+const NEXT_STEP = /\b(next (is|up)|i'?ll (now )?(start|begin|move on|do|build|open|run)|starting (on )?|moving on to|now (starting|building|doing))\b|\b(next,?\s+)?i(?:['’]ll|\s+will)\s+(?:(?:now|first|then|next)\s+)*[a-z]+\b|\bnext,?\s+i(?:['’]ll|\s+will)\b/i;
 const OPEN_STEP_MARK = /^[✱○]/;
 const QUIET_REASONS = ['asked_to_be_quiet', 'not_for_me'];
 const END_OF_TURN = ['no_reply_needed', 'react', 'unreact', 'edit_message', 'rename_thread'];
@@ -161,33 +163,40 @@ function wakesThread(name, input) {
   return false;
 }
 
+// Events in transcript order: { kind: 'prompt' } for a person's message or wake, { kind: 'tool', name, input },
+// or { kind: 'text', text } for assistant text. Malformed lines are skipped. Never throws.
+function transcriptEvents(transcriptText) {
+  const events = [];
+  for (const line of transcriptText.split('\n')) {
+    if (!line.trim()) continue;
+    let entry;
+    try { entry = JSON.parse(line); } catch { continue; }
+    const message = entry && entry.message;
+    const blocks = message && Array.isArray(message.content) ? message.content : [];
+    const assistant = Boolean(entry) && (entry.type === 'assistant' || Boolean(message && message.role === 'assistant'));
+    // A user entry that is not only tool results starts a new turn (a person's message or a wake).
+    if (!assistant && entry && entry.type === 'user' && message) {
+      const content = message.content;
+      const isPrompt = typeof content === 'string' || (Array.isArray(content) && content.some((b) => b && b.type !== 'tool_result'));
+      if (isPrompt) events.push({ kind: 'prompt' });
+    }
+    for (const block of blocks) {
+      if (!block || typeof block !== 'object') continue;
+      if (block.type === 'tool_use') {
+        const input = block.input && typeof block.input === 'object' ? block.input : {};
+        events.push({ kind: 'tool', name: String(block.name || ''), input });
+      } else if (block.type === 'text' && assistant && typeof block.text === 'string') {
+        events.push({ kind: 'text', text: block.text });
+      }
+    }
+  }
+  return events;
+}
+
 export function stalledPlan(transcriptText) {
   try {
     if (typeof transcriptText !== 'string' || !transcriptText) return '';
-    const events = []; // { kind: 'tool', name, input } or { kind: 'text', text }, in transcript order
-    for (const line of transcriptText.split('\n')) {
-      if (!line.trim()) continue;
-      let entry;
-      try { entry = JSON.parse(line); } catch { continue; }
-      const message = entry && entry.message;
-      const blocks = message && Array.isArray(message.content) ? message.content : [];
-      const assistant = Boolean(entry) && (entry.type === 'assistant' || Boolean(message && message.role === 'assistant'));
-      // A user entry that is not only tool results starts a new turn (a person's message or a wake).
-      if (!assistant && entry && entry.type === 'user' && message) {
-        const content = message.content;
-        const isPrompt = typeof content === 'string' || (Array.isArray(content) && content.some((b) => b && b.type !== 'tool_result'));
-        if (isPrompt) events.push({ kind: 'prompt' });
-      }
-      for (const block of blocks) {
-        if (!block || typeof block !== 'object') continue;
-        if (block.type === 'tool_use') {
-          const input = block.input && typeof block.input === 'object' ? block.input : {};
-          events.push({ kind: 'tool', name: String(block.name || ''), input });
-        } else if (block.type === 'text' && assistant && typeof block.text === 'string') {
-          events.push({ kind: 'text', text: block.text });
-        }
-      }
-    }
+    const events = transcriptEvents(transcriptText);
     let checklistAt = -1;
     for (let i = events.length - 1; i >= 0; i -= 1) {
       if (events[i].kind === 'tool' && endsWithTool(events[i].name, CHECKLIST_TOOL)) { checklistAt = i; break; }
@@ -224,12 +233,57 @@ export function stalledPlan(transcriptText) {
   }
 }
 
+// Decision-card stall (slice 19.203). In the current turn (events after the last prompt), a request_decision card
+// followed only by assistant text, post_message, or end-of-turn calls (no_reply_needed without a quiet reason,
+// react, unreact, edit_message, rename_thread) parks the thread. Any other tool call after the card (real work,
+// send_later, create_trigger, ScheduleWakeup) lets the stop through, as does no_reply_needed with a quiet reason.
+// Returns '' (allow) or a block reason. Never throws.
+const DECISION_REASON = 'You posted a decision card and stopped. Keep working on the option you recommended while the card waits, unless that step cannot be undone. If it truly cannot go on without the answer, stop again.';
+export function parkedOnDecision(transcriptText) {
+  try {
+    if (typeof transcriptText !== 'string' || !transcriptText) return '';
+    const events = transcriptEvents(transcriptText);
+    let turnStart = 0;
+    for (let i = events.length - 1; i >= 0; i -= 1) {
+      if (events[i].kind === 'prompt') { turnStart = i + 1; break; }
+    }
+    let cardAt = -1;
+    for (let i = events.length - 1; i >= turnStart; i -= 1) {
+      if (events[i].kind === 'tool' && endsWithTool(events[i].name, 'request_decision')) { cardAt = i; break; }
+    }
+    if (cardAt < 0) return '';
+    for (const ev of events.slice(cardAt + 1)) {
+      if (ev.kind !== 'tool' || endsWithTool(ev.name, 'post_message')) continue;
+      if (endsWithTool(ev.name, 'no_reply_needed')) {
+        if (QUIET_REASONS.includes(ev.input.reason)) return '';
+        continue;
+      }
+      if (END_OF_TURN.some((t) => endsWithTool(ev.name, t))) continue;
+      return '';
+    }
+    return DECISION_REASON;
+  } catch {
+    return '';
+  }
+}
+
 // Block reason for a stalled checklist or stated next step at payload.transcript_path, or ''. Never throws.
 const stalledPlanReason = (transcriptPath) => {
   try {
     if (!transcriptPath) return '';
     fs.accessSync(transcriptPath, fs.constants.R_OK);
     return stalledPlan(fs.readFileSync(transcriptPath, 'utf8'));
+  } catch {
+    return '';
+  }
+};
+
+// Block reason for a decision card the turn ended on, at payload.transcript_path, or ''. Never throws.
+const parkedOnDecisionReason = (transcriptPath) => {
+  try {
+    if (!transcriptPath) return '';
+    fs.accessSync(transcriptPath, fs.constants.R_OK);
+    return parkedOnDecision(fs.readFileSync(transcriptPath, 'utf8'));
   } catch {
     return '';
   }
@@ -261,7 +315,7 @@ export function stopDecision({ root, env = {}, payload = {} } = {}) {
     }
     if (escapeReason(env)) return '';
     const transcriptPath = typeof payload.transcript_path === 'string' ? payload.transcript_path : '';
-    return unwatchedPrReason(transcriptPath) || stalledPlanReason(transcriptPath);
+    return unwatchedPrReason(transcriptPath) || stalledPlanReason(transcriptPath) || parkedOnDecisionReason(transcriptPath);
   } catch {
     return '';
   }
