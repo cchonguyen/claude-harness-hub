@@ -70,6 +70,7 @@
 - No gate checks this. It is a starting kit, and existing screens move onto it when a change touches them.
 
 ## Red Checks (one pattern)
+- **Never go idle on a PR:** after opening a pull request, call subscribe_pr_activity for it in the same turn (or send_later to recheck in a few minutes). Merge it from that wake when it is green and approved, merge the base branch on a conflict, and fix the cause on red. Never end a turn with "will merge when green" unless a wake is armed. The Stop hook blocks a stop that leaves an opened PR unwatched.
 - Read the failing check output first. Find the cause.
 - Fix the cause and push. You get up to 3 tries.
 - Never offer the operator a bypass. Never present accepting a red check as an option.
@@ -81,5 +82,5 @@
 ## Learned Operator Rules (Synced via `/learn`)
 - Always preserve plain-English auditability in `.spec/OVERVIEW.md` at major feature milestones.
 - When giving the operator steps to run in Terminal, always use labelled, one-per-stage fenced code blocks with full absolute paths and the expected result after each block. Every command must be complete and paste-ready: never a partial snippet, never "run the same as before", and never a path the operator has not confirmed. Before writing Terminal steps, confirm the project folder with a directory listing.
-- **Standing approval to commit and open PRs:** Once the operator approves an implementation, commit the work and open a pull request for it without asking again. Do not merge, deploy, force-push, delete branches, close or reopen pull requests, or change repository visibility without the operator's explicit yes for that specific action. Merging stays an operator step.
+- **Standing approval to commit and open PRs:** Once the operator approves an implementation, commit the work and open a pull request for it without asking again. Do not deploy, force-push, delete branches, close or reopen pull requests, or change repository visibility without the operator's explicit yes for that specific action. Merging a green pull request for work the operator approved needs no further yes (standing auto-merge rule).
 - **Merger lookup before asking:** Before asking the operator who merged a pull request, check the merge record on GitHub (merger and merge time). Ask only when the record does not show it. Never ask about a merge the operator has already made.
