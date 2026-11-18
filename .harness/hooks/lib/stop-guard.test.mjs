@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { stopDecision, hasInProgressSlice, unwatchedPrs } from '../stop-guard.mjs';
+import { stopDecision, hasInProgressSlice, unwatchedPrs, stalledPlan } from '../stop-guard.mjs';
 
 const HOOK = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'stop-guard.mjs');
 
@@ -292,4 +292,101 @@ test('unwatchedPrs: this session\'s real shape (subscribe beside create) is not 
     ...openPr('d', 6),
   );
   assert.deepEqual(unwatchedPrs(text), [6]);
+});
+
+// Checklist and next-step stall (slice 19.201).
+const CL = 'mcp__hearthbot__update_progress_checklist';
+const OPEN_LIST = 'Title\n\n✓ a\n✱ b\n○ c';
+const DONE_LIST = 'Title\n\n✓ a\n✓ b';
+const checklist = (text) => toolUse('cl', CL, { text });
+
+test('stalledPlan: open checklist steps with nothing after them blocks and names the next step', () => {
+  const reason = stalledPlan(transcript(checklist(OPEN_LIST)));
+  assert.match(reason, /unfinished/);
+  assert.match(reason, /"b"/);
+});
+
+test('stalledPlan: all steps done allows stop', () => {
+  assert.equal(stalledPlan(transcript(checklist(DONE_LIST))), '');
+});
+
+test('stalledPlan: open steps then send_later allows stop', () => {
+  assert.equal(stalledPlan(transcript(checklist(OPEN_LIST), toolUse('s', 'mcp__hearthbot__send_later', { delaySeconds: 600 }))), '');
+});
+
+test('stalledPlan: open steps then request_decision allows stop', () => {
+  assert.equal(stalledPlan(transcript(checklist(OPEN_LIST), toolUse('d', 'mcp__hearthbot__request_decision', { question: 'Go on?' }))), '');
+});
+
+test('stalledPlan: open steps then post_message with a question allows stop; without one blocks', () => {
+  assert.equal(stalledPlan(transcript(checklist(OPEN_LIST), toolUse('p', 'mcp__hearthbot__post_message', { text: 'Ready to merge?' }))), '');
+  assert.match(stalledPlan(transcript(checklist(OPEN_LIST), toolUse('p', 'mcp__hearthbot__post_message', { text: 'Working on it.' }))), /unfinished/);
+});
+
+test('stalledPlan: open steps then subscribe_pr_activity only still blocks', () => {
+  assert.match(stalledPlan(transcript(checklist(OPEN_LIST), toolUse('s', 'mcp__github__subscribe_pr_activity', { pullNumber: 7 }))), /unfinished/);
+});
+
+test('stalledPlan: background Agent covers the stop; a foreground one does not', () => {
+  assert.equal(stalledPlan(transcript(checklist(OPEN_LIST), toolUse('g', 'Agent', { prompt: 'x' }))), '');
+  assert.match(stalledPlan(transcript(checklist(OPEN_LIST), toolUse('g', 'Agent', { prompt: 'x', run_in_background: false }))), /unfinished/);
+});
+
+test('stalledPlan: set_thread_resolved with resolved true allows stop', () => {
+  assert.equal(stalledPlan(transcript(checklist(OPEN_LIST), toolUse('r', 'mcp__hearthbot__set_thread_resolved', { resolved: true }))), '');
+});
+
+test('stalledPlan: an all-done checklist after an earlier open one allows stop', () => {
+  assert.equal(stalledPlan(transcript(checklist(OPEN_LIST), checklist(DONE_LIST))), '');
+});
+
+test('stalledPlan: a stated next step with no checklist blocks and quotes the phrase', () => {
+  const reason = stalledPlan(transcript(toolUse('p', 'mcp__hearthbot__post_message', { text: 'Merged. Next is slice 3, the writes.' })));
+  assert.match(reason, /Next is/);
+});
+
+test('stalledPlan: garbage lines and non-string input do not throw', () => {
+  assert.equal(stalledPlan('{not json\nnull\n[1,2\n'), '');
+  assert.equal(stalledPlan(''), '');
+  assert.equal(stalledPlan(undefined), '');
+});
+
+test('stopDecision: stop_hook_active allows a stalled plan', () => {
+  const root = makeRoot(DONE_ONLY);
+  const transcriptPath = path.join(root, 'session.jsonl');
+  fs.writeFileSync(transcriptPath, transcript(checklist(OPEN_LIST)));
+  try {
+    assert.equal(stopDecision({ root, env: {}, payload: { stop_hook_active: true, transcript_path: transcriptPath } }), '');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('stopDecision: a stalled plan with no in-progress slice blocks', () => {
+  const root = makeRoot(DONE_ONLY);
+  const transcriptPath = path.join(root, 'session.jsonl');
+  fs.writeFileSync(transcriptPath, transcript(checklist(OPEN_LIST)));
+  try {
+    assert.ok(stopDecision({ root, env: {}, payload: { transcript_path: transcriptPath } }).length > 0);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('stalledPlan: a stated next step followed by real work is not a stall', () => {
+  const text = transcript(
+    JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text: "I'll run the tests now." }] } }),
+    toolUse('b1', 'Bash', { command: 'npm test' }),
+    toolResult('b1', 'ok'),
+    toolUse('n1', 'mcp__hearthbot__no_reply_needed', { reason: 'nothing_to_add' }),
+  );
+  assert.equal(stalledPlan(text), '');
+});
+
+test('stalledPlan: a stated next step followed only by end-of-turn calls is a stall', () => {
+  const text = transcript(
+    toolUse('p1', 'mcp__hearthbot__post_message', { text: 'Merged. Next is slice 3.' }),
+    toolUse('r1', 'mcp__hearthbot__unreact', { emoji: 'eyes' }),
+  );
+  assert.match(stalledPlan(text), /Next is/);
 });
