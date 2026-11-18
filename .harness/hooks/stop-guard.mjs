@@ -172,6 +172,12 @@ export function stalledPlan(transcriptText) {
       const message = entry && entry.message;
       const blocks = message && Array.isArray(message.content) ? message.content : [];
       const assistant = Boolean(entry) && (entry.type === 'assistant' || Boolean(message && message.role === 'assistant'));
+      // A user entry that is not only tool results starts a new turn (a person's message or a wake).
+      if (!assistant && entry && entry.type === 'user' && message) {
+        const content = message.content;
+        const isPrompt = typeof content === 'string' || (Array.isArray(content) && content.some((b) => b && b.type !== 'tool_result'));
+        if (isPrompt) events.push({ kind: 'prompt' });
+      }
       for (const block of blocks) {
         if (!block || typeof block !== 'object') continue;
         if (block.type === 'tool_use') {
@@ -202,7 +208,11 @@ export function stalledPlan(transcriptText) {
       stated = actedOn ? null : NEXT_STEP.exec(said);
     }
     if (openSteps.length === 0 && !stated) return '';
-    const base = checklistAt >= 0 ? checklistAt : lastAt;
+    // A wake set earlier in the same turn as the checklist counts too (calls in one message can come in any order).
+    let base = checklistAt >= 0 ? checklistAt : lastAt;
+    for (let i = base - 1; i >= 0; i -= 1) {
+      if (events[i].kind === 'prompt') { base = i; break; }
+    }
     if (events.slice(base + 1).some((ev) => ev.kind === 'tool' && wakesThread(ev.name, ev.input))) return '';
     if (openSteps.length > 0) {
       const step = openSteps[0].replace(OPEN_STEP_MARK, '').trim().slice(0, 80);

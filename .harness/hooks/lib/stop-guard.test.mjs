@@ -390,3 +390,23 @@ test('stalledPlan: a stated next step followed only by end-of-turn calls is a st
   );
   assert.match(stalledPlan(text), /Next is/);
 });
+
+test('stalledPlan: a send_later earlier in the same turn as the checklist counts', () => {
+  const text = transcript(
+    JSON.stringify({ type: 'user', message: { content: 'wake' } }),
+    toolUse('l1', 'mcp__claude-code-remote__send_later', { delay_minutes: 6 }),
+    toolResult('l1', 'ok'),
+    toolUse('c1', 'mcp__hearthbot__update_progress_checklist', { text: 'T\n\n✓ a\n✱ b' }),
+  );
+  assert.equal(stalledPlan(text), '');
+});
+
+test('stalledPlan: a send_later from an earlier turn does not cover a later checklist', () => {
+  const text = transcript(
+    toolUse('l1', 'mcp__claude-code-remote__send_later', { delay_minutes: 6 }),
+    toolResult('l1', 'ok'),
+    JSON.stringify({ type: 'user', message: { content: 'wake' } }),
+    toolUse('c1', 'mcp__hearthbot__update_progress_checklist', { text: 'T\n\n✓ a\n✱ b' }),
+  );
+  assert.match(stalledPlan(text), /unfinished/);
+});
