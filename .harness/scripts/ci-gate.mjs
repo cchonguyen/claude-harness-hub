@@ -162,6 +162,24 @@ export function duplicateSliceIds(progressText) {
     .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 }
 
+// Duplicated slice ids where at least one of the lines with that id is still open ([ ]).
+// Old duplicates whose lines are all done do not block later PRs.
+const OPEN_SLICE_LINE = /^\s*-\s*\[ \]/;
+export function openDuplicateSliceIds(progressText) {
+  const counts = new Map();
+  const open = new Set();
+  for (const line of String(progressText ?? '').split('\n')) {
+    const m = line.match(SLICE_ID_LINE);
+    if (!m) continue;
+    counts.set(m[1], (counts.get(m[1]) ?? 0) + 1);
+    if (OPEN_SLICE_LINE.test(line)) open.add(m[1]);
+  }
+  return [...counts.entries()]
+    .filter(([id, n]) => n > 1 && open.has(id))
+    .map(([id]) => id)
+    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+}
+
 // Pure PR gate. Returns { problems, warnings, notes }. Every problem tells the agent the exact fix.
 export function gateCheck({ body, labels = [], progressText = '' } = {}) {
   const problems = [];
@@ -178,9 +196,13 @@ export function gateCheck({ body, labels = [], progressText = '' } = {}) {
   if (findIssueLink(body) === null) {
     problems.push('No linked issue: add `Closes #N` to the PR body (the gate workflow normally adds one automatically).');
   }
-  const dupes = duplicateSliceIds(progressText);
+  const dupes = openDuplicateSliceIds(progressText);
   if (dupes.length > 0) {
     problems.push(`Duplicate slice ids in .spec/PROGRESS.md: ${dupes.join(', ')}. Fix: renumber the later line of each pair to the next free id; \`node .harness/scripts/start-slice.mjs\` picks free ids.`);
+  }
+  const doneDupes = duplicateSliceIds(progressText).filter((id) => !dupes.includes(id));
+  if (doneDupes.length > 0) {
+    notes.push(`Old duplicate slice ids (all done, ignored): ${doneDupes.join(', ')}.`);
   }
   return { problems, warnings, notes };
 }
