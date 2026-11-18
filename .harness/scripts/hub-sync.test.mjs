@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -167,6 +168,31 @@ test('pullFromHub pulls .harness/agents and synchronizes into .claude/agents and
   assert.match(agentsContent, /<!-- >>> harness >>> -->/);
   assert.match(agentsContent, /## Card Catalog block/);
   assert.match(agentsContent, /<!-- <<< harness <<< -->/);
+
+  fs.rmSync(hubRoot, { recursive: true, force: true });
+  fs.rmSync(spokeRoot, { recursive: true, force: true });
+});
+
+test('pullFromHub records the hash of the runtime-payloads.json compiled in the spoke', () => {
+  const hubRoot = makeTempDir('hub-');
+  const spokeRoot = makeTempDir('spoke-');
+  const hubAgentsDir = path.join(hubRoot, '.harness', 'agents');
+  fs.mkdirSync(hubAgentsDir, { recursive: true });
+  fs.writeFileSync(path.join(hubAgentsDir, 'gf-coder.md'), '---\nname: gf-coder\nmodel: haiku\n---\nBody\n');
+  // A stale hub copy that differs from what the spoke compiles.
+  fs.writeFileSync(path.join(hubAgentsDir, 'runtime-payloads.json'), '{"stale": true}\n');
+  fs.mkdirSync(path.join(hubRoot, '.claude'), { recursive: true });
+  fs.writeFileSync(path.join(hubRoot, '.claude', 'settings.json'), JSON.stringify({ permissions: { allow: [], deny: [] } }));
+  fs.writeFileSync(path.join(hubRoot, '.harness-version'), '4.0.0\n');
+
+  pullFromHub(hubRoot, spokeRoot);
+
+  const payloadPath = path.join(spokeRoot, '.harness', 'agents', 'runtime-payloads.json');
+  const compiled = fs.readFileSync(payloadPath);
+  assert.notEqual(compiled.toString(), '{"stale": true}\n');
+  const manifest = JSON.parse(fs.readFileSync(path.join(spokeRoot, '.harness', 'managed.json'), 'utf8'));
+  const expected = crypto.createHash('sha256').update(compiled).digest('hex');
+  assert.equal(manifest.files['.harness/agents/runtime-payloads.json'], expected);
 
   fs.rmSync(hubRoot, { recursive: true, force: true });
   fs.rmSync(spokeRoot, { recursive: true, force: true });
