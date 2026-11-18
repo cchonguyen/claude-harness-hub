@@ -355,6 +355,14 @@ export function pullFromHub(hubRoot, spokeRoot = (process.env.CLAUDE_PROJECT_DIR
     receipt.written.push(...syncedAgents);
   }
 
+  // syncAgents recompiles runtime-payloads.json in the spoke, so record the compiled file's hash, not the hub copy's.
+  // Otherwise pr-scope-check sees a hash mismatch and does not recognise the PR as a hub sync.
+  const payloadRel = '.harness/agents/runtime-payloads.json';
+  const payloadAbs = path.join(spokeRoot, payloadRel);
+  if (files[payloadRel] !== undefined && fs.existsSync(payloadAbs)) {
+    files[payloadRel] = sha256(fs.readFileSync(payloadAbs));
+  }
+
   // Keep the old hash for conflicted files so they stay conflicted until resolved
   writeManifest(spokeRoot, files, readText(path.join(spokeRoot, '.harness-version'), '').trim() || 'unknown', settingsGenerated);
   return { receipt, migrating };
