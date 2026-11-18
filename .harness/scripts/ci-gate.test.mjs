@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { parseRefereeTrailers, hasRefereeTrailer, addedSliceLines, checkPullRequest, commitsMissingTrailer, isBookkeepingCommit, findIssueLink, duplicateSliceIds, gateCheck } from './ci-gate.mjs';
+import { parseRefereeTrailers, hasRefereeTrailer, addedSliceLines, checkPullRequest, commitsMissingTrailer, isBookkeepingCommit, findIssueLink, duplicateSliceIds, openDuplicateSliceIds, gateCheck } from './ci-gate.mjs';
 
 const TREE = 'a'.repeat(40);
 
@@ -338,6 +338,31 @@ test('gateCheck reports both problems together', () => {
 test('gateCheck passes a clean PR with an issue link and unique slices', () => {
   const r = gateCheck({ body: 'Closes #175', labels: ['slice'], progressText: '- [ ] **Slice 1.1: a**\n- [x] **Slice 1.2: b**' });
   assert.deepEqual(r, { problems: [], warnings: [], notes: [] });
+});
+
+test('openDuplicateSliceIds ignores an id whose duplicate lines are all done', () => {
+  assert.deepEqual(openDuplicateSliceIds('- [x] **Slice 4.2: a**\n- [x] **Slice 4.2: b**'), []);
+});
+
+test('openDuplicateSliceIds returns an id when one of its duplicate lines is open', () => {
+  assert.deepEqual(openDuplicateSliceIds('- [ ] **Slice 4.2: a**\n- [x] **Slice 4.2: b**'), ['4.2']);
+});
+
+test('openDuplicateSliceIds returns an id when both duplicate lines are open', () => {
+  assert.deepEqual(openDuplicateSliceIds('- [ ] **Slice 4.2: a**\n- [ ] **Slice 4.2: b**'), ['4.2']);
+});
+
+test('gateCheck ignores a done+done duplicate and notes it', () => {
+  const r = gateCheck({ body: 'Closes #1', labels: [], progressText: '- [x] **Slice 4.2: a**\n- [x] **Slice 4.2: b**' });
+  assert.deepEqual(r.problems, []);
+  assert.deepEqual(r.notes, ['Old duplicate slice ids (all done, ignored): 4.2.']);
+});
+
+test('gateCheck still fails an open duplicate and adds no done-duplicate note for it', () => {
+  const r = gateCheck({ body: 'Closes #1', labels: [], progressText: '- [ ] **Slice 4.2: a**\n- [x] **Slice 4.2: b**' });
+  assert.equal(r.problems.length, 1);
+  assert.match(r.problems[0], /Duplicate slice ids in \.spec\/PROGRESS\.md: 4\.2/);
+  assert.deepEqual(r.notes, []);
 });
 
 test('gate and has-issue CLI modes work on a body file', () => {
