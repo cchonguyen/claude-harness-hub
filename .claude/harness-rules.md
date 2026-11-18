@@ -71,6 +71,7 @@
 
 ## Red Checks (one pattern)
 - **Never go idle on a PR:** after opening a pull request, call subscribe_pr_activity for it in the same turn (or send_later to recheck in a few minutes). Merge it from that wake when it is green and approved, merge the base branch on a conflict, and fix the cause on red. Never end a turn with "will merge when green" unless a wake is armed. The Stop hook blocks a stop that leaves an opened PR unwatched.
+- **Never go idle with a plan:** do not end a turn while your checklist has unfinished steps or you have just said what you will do next. Do the next step, or ask Charlie with request_decision, or call send_later to check back. A PR subscription alone is not enough: add a send_later fallback. The Stop hook blocks a stop that leaves open steps with nothing to wake the thread.
 - Read the failing check output first. Find the cause.
 - Fix the cause and push. You get up to 3 tries.
 - Never offer the operator a bypass. Never present accepting a red check as an option.
