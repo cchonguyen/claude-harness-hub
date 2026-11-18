@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { stopDecision, hasInProgressSlice, unwatchedPrs, stalledPlan } from '../stop-guard.mjs';
+import { stopDecision, hasInProgressSlice, unwatchedPrs, stalledPlan, parkedOnDecision } from '../stop-guard.mjs';
 
 const HOOK = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'stop-guard.mjs');
 
@@ -409,4 +409,116 @@ test('stalledPlan: a send_later from an earlier turn does not cover a later chec
     toolUse('c1', 'mcp__hearthbot__update_progress_checklist', { text: 'T\n\n✓ a\n✱ b' }),
   );
   assert.match(stalledPlan(text), /unfinished/);
+});
+
+// First-person next steps and decision cards (slice 19.203).
+const assistantText = (text) => JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text }] } });
+const userPrompt = (text) => JSON.stringify({ type: 'user', message: { content: text } });
+const DECISION_REASON_START = 'You posted a decision card and stopped.';
+const decision = (id = 'd') => toolUse(id, 'mcp__hearthbot__request_decision', { question: 'Go on?' });
+const noReply = (reason, id = 'n') => toolUse(id, 'mcp__hearthbot__no_reply_needed', { reason });
+
+test('stalledPlan: "I\'ll check" in a post_message with nothing after blocks and quotes the phrase', () => {
+  const reason = stalledPlan(transcript(toolUse('p', 'mcp__hearthbot__post_message', { text: "I'll check the undo first" })));
+  assert.match(reason, /"I'll check"/);
+});
+
+test('stalledPlan: "Next I\'ll check" in assistant text blocks', () => {
+  const reason = stalledPlan(transcript(assistantText('Merged. Next I\'ll check the logs.')));
+  assert.match(reason, /Next I'll check/);
+});
+
+test('stalledPlan: curly apostrophe "I’ll check" in assistant text blocks', () => {
+  const reason = stalledPlan(transcript(assistantText('Pushed. I’ll check the build.')));
+  assert.match(reason, /I’ll check/);
+});
+
+test('stalledPlan: "I\'ll check" with "I will" and "I\'ll first" forms block', () => {
+  assert.match(stalledPlan(transcript(assistantText('I will check the tests.'))), /I will check/);
+  assert.match(stalledPlan(transcript(assistantText("I'll first check the diff."))), /I'll first check/);
+});
+
+test('stalledPlan: "Next, I\'ll" bare form blocks', () => {
+  assert.match(stalledPlan(transcript(assistantText('Done with that. Next, I\'ll'))), /Next, I'll/);
+});
+
+test('stalledPlan: "I\'ll check" followed by a Read tool call is not a stall', () => {
+  const text = transcript(
+    assistantText("I'll check the file."),
+    toolUse('r1', 'Read', { file_path: '/x/a.mjs' }),
+    toolResult('r1', 'contents'),
+    toolUse('n1', 'mcp__hearthbot__no_reply_needed', { reason: 'nothing_to_add' }),
+  );
+  assert.equal(stalledPlan(text), '');
+});
+
+test('parkedOnDecision: request_decision then no_reply_needed(nothing_to_add) blocks with the decision reason', () => {
+  const reason = parkedOnDecision(transcript(decision(), noReply('nothing_to_add')));
+  assert.ok(reason.startsWith(DECISION_REASON_START));
+  assert.match(reason, /stop again\.$/);
+});
+
+test('parkedOnDecision: request_decision then a Read or Edit call allows', () => {
+  assert.equal(parkedOnDecision(transcript(decision(), toolUse('r', 'Read', { file_path: '/x' }), toolResult('r', 'x'))), '');
+  assert.equal(parkedOnDecision(transcript(decision(), toolUse('e', 'Edit', { file_path: '/x' }))), '');
+});
+
+test('parkedOnDecision: request_decision then send_later, create_trigger or ScheduleWakeup allows', () => {
+  assert.equal(parkedOnDecision(transcript(decision(), toolUse('s', 'mcp__claude-code-remote__send_later', { delaySeconds: 600 }))), '');
+  assert.equal(parkedOnDecision(transcript(decision(), toolUse('t', 'mcp__hearthbot__create_trigger', {}))), '');
+  assert.equal(parkedOnDecision(transcript(decision(), toolUse('w', 'ScheduleWakeup', {}))), '');
+});
+
+test('parkedOnDecision: request_decision then only post_message, react or text blocks', () => {
+  assert.ok(parkedOnDecision(transcript(decision(), toolUse('p', 'mcp__hearthbot__post_message', { text: 'FYI' }))).length > 0);
+  assert.ok(parkedOnDecision(transcript(decision(), toolUse('r', 'mcp__hearthbot__react', { emoji: 'eyes' }), assistantText('Waiting.'))).length > 0);
+});
+
+test('parkedOnDecision: no_reply_needed with a quiet reason allows', () => {
+  assert.equal(parkedOnDecision(transcript(decision(), noReply('asked_to_be_quiet'))), '');
+  assert.equal(parkedOnDecision(transcript(decision(), noReply('not_for_me'))), '');
+});
+
+test('parkedOnDecision: request_decision in an earlier turn, then a new prompt and a finished turn does not block', () => {
+  const text = transcript(decision(), userPrompt('thanks'), assistantText('Done.'));
+  assert.equal(parkedOnDecision(text), '');
+  assert.equal(stalledPlan(text), '');
+});
+
+test('parkedOnDecision: garbage and non-string input do not throw', () => {
+  assert.equal(parkedOnDecision('{not json\nnull\n'), '');
+  assert.equal(parkedOnDecision(''), '');
+  assert.equal(parkedOnDecision(undefined), '');
+});
+
+test('stopDecision: decision card then a bare end blocks, and stop_hook_active allows', () => {
+  const root = makeRoot(DONE_ONLY);
+  const transcriptPath = path.join(root, 'session.jsonl');
+  fs.writeFileSync(transcriptPath, transcript(decision(), noReply('nothing_to_add')));
+  try {
+    const payload = { transcript_path: transcriptPath };
+    assert.match(stopDecision({ root, env: {}, payload }), /You posted a decision card and stopped\./);
+    assert.equal(stopDecision({ root, env: {}, payload: { ...payload, stop_hook_active: true } }), '');
+    assert.equal(stopDecision({ root, env: { CLAUDE_WAKE_SCHEDULED: '1' }, payload }), '');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('hook run: decision card then a bare end emits a block on stdout', () => {
+  const root = makeRoot(DONE_ONLY);
+  const transcriptPath = path.join(root, 'session.jsonl');
+  fs.writeFileSync(transcriptPath, transcript(decision(), noReply('nothing_to_add')));
+  try {
+    const env = { ...process.env, CLAUDE_PROJECT_DIR: root };
+    delete env.CLAUDE_WAKE_SCHEDULED;
+    delete env.CLAUDE_PR_SUBSCRIBED;
+    const res = spawnSync(process.execPath, [HOOK], { input: JSON.stringify({ cwd: root, transcript_path: transcriptPath }), encoding: 'utf8', env });
+    assert.equal(res.status, 0);
+    assert.equal(JSON.parse(res.stdout).decision, 'block');
+    const again = spawnSync(process.execPath, [HOOK], { input: JSON.stringify({ cwd: root, transcript_path: transcriptPath, stop_hook_active: true }), encoding: 'utf8', env });
+    assert.equal(again.stdout, '');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
 });
