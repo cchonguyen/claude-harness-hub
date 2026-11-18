@@ -258,3 +258,38 @@ test('stopDecision: block reason tells the thread to read a closed PR with pull_
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
+
+test('unwatchedPrs: subscribe sent in parallel with the open (before its result) counts as watched', () => {
+  const text = transcript(
+    JSON.stringify({ type: 'assistant', message: { content: [
+      { type: 'tool_use', id: 'c', name: 'mcp__github__create_pull_request', input: {} },
+      { type: 'tool_use', id: 's', name: 'mcp__claude-code-remote__subscribe_pr_activity', input: { pullNumber: 200 } },
+    ] } }),
+    toolResult('c', [{ type: 'text', text: 'https://github.com/acme/app/pull/200' }]),
+    toolResult('s', 'Subscribed'),
+  );
+  assert.deepEqual(unwatchedPrs(text), []);
+});
+
+test('unwatchedPrs: send_later sent in parallel with the open counts as watched', () => {
+  const text = transcript(
+    JSON.stringify({ type: 'assistant', message: { content: [
+      { type: 'tool_use', id: 'c', name: 'mcp__github__create_pull_request', input: {} },
+      { type: 'tool_use', id: 'l', name: 'mcp__claude-code-remote__send_later', input: {} },
+    ] } }),
+    toolResult('c', [{ type: 'text', text: 'https://github.com/acme/app/pull/9' }]),
+  );
+  assert.deepEqual(unwatchedPrs(text), []);
+});
+
+test('unwatchedPrs: this session\'s real shape (subscribe beside create) is not flagged, but a later open still is', () => {
+  const text = transcript(
+    JSON.stringify({ type: 'assistant', message: { content: [
+      { type: 'tool_use', id: 'c', name: 'mcp__github__create_pull_request', input: {} },
+      { type: 'tool_use', id: 's', name: 'mcp__claude-code-remote__subscribe_pr_activity', input: { pullNumber: 5 } },
+    ] } }),
+    toolResult('c', [{ type: 'text', text: 'https://github.com/acme/app/pull/5' }]),
+    ...openPr('d', 6),
+  );
+  assert.deepEqual(unwatchedPrs(text), [6]);
+});

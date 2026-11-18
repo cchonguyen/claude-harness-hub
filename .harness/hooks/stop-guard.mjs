@@ -85,6 +85,8 @@ export function unwatchedPrs(transcriptText) {
     const closed = new Set(); // PR numbers the transcript shows closed or merged, at any point
     const pendingOpens = new Set(); // tool_use ids of create_pull_request calls awaiting a result
     const pendingReads = new Map(); // tool_use id -> input of pull_request_read / list_pull_requests calls
+    const watchedAny = new Set(); // pullNumbers subscribed or merged at any point (parallel calls can precede the open's result)
+    const timerCovered = new Set(); // create_pull_request ids still awaiting a result when a timer was set
     for (const line of transcriptText.split('\n')) {
       if (!line.trim()) continue;
       for (const match of line.matchAll(CLOSED_EVENT)) closed.add(Number(match[1]));
@@ -100,9 +102,11 @@ export function unwatchedPrs(transcriptText) {
             if (block.id) pendingOpens.add(block.id);
           } else if (endsWithTool(name, 'subscribe_pr_activity') || endsWithTool(name, 'merge_pull_request')) {
             const n = Number(input.pullNumber);
+            watchedAny.add(n);
             if (opened.has(n)) opened.set(n, true);
           } else if (endsWithTool(name, 'send_later') || endsWithTool(name, 'create_trigger') || endsWithTool(name, 'ScheduleWakeup')) {
             for (const n of opened.keys()) opened.set(n, true);
+            for (const id of pendingOpens) timerCovered.add(id);
           } else if (endsWithTool(name, 'update_pull_request')) {
             if (input.state === 'closed') closed.add(Number(input.pullNumber));
           } else if (endsWithTool(name, 'unsubscribe_pr_activity')) {
@@ -116,7 +120,7 @@ export function unwatchedPrs(transcriptText) {
             const match = /\/pull\/(\d+)/.exec(resultText(block.content));
             if (match) {
               const n = Number(match[1]);
-              if (!opened.has(n)) opened.set(n, false);
+              if (!opened.has(n)) opened.set(n, timerCovered.has(block.tool_use_id));
             }
           } else if (pendingReads.has(block.tool_use_id)) {
             const input = pendingReads.get(block.tool_use_id);
@@ -128,7 +132,7 @@ export function unwatchedPrs(transcriptText) {
         }
       }
     }
-    return [...opened.entries()].filter(([n, watched]) => !watched && !closed.has(n)).map(([n]) => n).sort((a, b) => a - b);
+    return [...opened.entries()].filter(([n, watched]) => !watched && !watchedAny.has(n) && !closed.has(n)).map(([n]) => n).sort((a, b) => a - b);
   } catch {
     return [];
   }
