@@ -89,8 +89,8 @@ function makeRepo() {
   git('init', '-q', '-b', 'main');
   git('config', 'user.email', 'test@example.com');
   git('config', 'user.name', 'test');
-  // STATE.json is machine-local and gitignored in real repos; mirror that here.
-  fs.writeFileSync(path.join(dir, '.gitignore'), '.spec/STATE.json\n');
+  // The event store is session-local and gitignored in real repos (gitignore.block); mirror that here.
+  fs.writeFileSync(path.join(dir, '.gitignore'), '.spec/.events/\n');
   return dir;
 }
 
@@ -366,7 +366,7 @@ test('finishSlice git staging filters gitignored tracking files and succeeds', (
   fs.writeFileSync(path.join(dir, 'a.txt'), 'a initial');
 
   // Gitignore tracking files
-  fs.writeFileSync(path.join(dir, '.gitignore'), '.spec/.session-telemetry.json\n.spec/STATUS_BATCH.jsonl\n.spec/STATE.json\n');
+  fs.writeFileSync(path.join(dir, '.gitignore'), '.spec/.session-telemetry.json\n.spec/.events/\n');
 
   git('add', '-A');
   git('commit', '-m', 'init with gitignore');
