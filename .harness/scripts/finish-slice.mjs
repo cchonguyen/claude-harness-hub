@@ -14,7 +14,7 @@ import { updateTelemetry } from './lib/telemetry-store.mjs';
 const gitIn = (cwd, args) =>
   execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
 
-export const CI_VERIFIED_REASON = 'CI-verified: the "verify" check on the pull request (.github/workflows/harness-verify.yml) is the verifier';
+export const CI_VERIFIED_REASON = 'CI-verified: the "pr-check" check on the pull request (.github/workflows/harness-pr-check.yml) is the verifier';
 
 /**
  * Runs bin/verify-slice.sh as an optional manual step when the operator's verify secret is on this machine.
