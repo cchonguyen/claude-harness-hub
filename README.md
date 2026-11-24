@@ -2,7 +2,7 @@
 
 Claude Harness Hub is the home of a **harness** for [Claude Code](https://www.anthropic.com/claude-code), Anthropic's AI coding assistant that runs in a terminal. A harness is a set of rules, guard scripts, and checks that keep an AI agent focused on the work you asked for, so it does not wander, skip verification, or edit files it should leave alone.
 
-This repository is the source of truth for one such harness (currently engine version 3.2.0, see [`.harness-version`](.harness-version)). It also contains a small local dashboard for browsing the harness, running its checks, and editing its planning files.
+This repository is the source of truth for one such harness (currently engine version 3.2.0, see [`.harness-version`](.harness-version)). It also contains a read-only status page and a local Command Center (`dashboard/`) that show slice state from Git and GitHub.
 
 ## Who this is for
 
@@ -19,32 +19,18 @@ No API keys are needed to run anything in this repository.
 | `.claude/` | Subagent definitions, slash commands, and `settings.json` with allow and deny rules and hooks. |
 | `.harness/` | Zero-dependency Node.js hooks and scripts: guards, checks, sync, and the PR scope check. |
 | `.spec/` | Project state: the slice queue, architecture decisions, contracts, and handoff notes. |
-| `server.ts`, `src/` | The dashboard: an Express server and a React front end. |
+| `dashboard/` | The hosted status page (GitHub Pages) and the local Command Center. See [`dashboard/README.md`](dashboard/README.md). |
 | `.github/workflows/` | Continuous integration: typecheck, lint, and unit tests on every pull request and push to `main`. |
 
 ## Quick start
 
-You need [Node.js 22](https://nodejs.org) (the version CI uses) and Git.
+You need [Node.js 22](https://nodejs.org) (the version CI uses) and Git. The harness scripts have no dependencies.
 
 ```bash
 git clone https://github.com/cchonguyen/claude-harness-hub.git
 cd claude-harness-hub
-npm install
-npm run dev
+node --test plugins/harness/test/run.test.mjs .harness/hooks/lib/*.test.mjs .harness/scripts/*.test.mjs .harness/scripts/lib/*.test.mjs
 ```
-
-Then open <http://127.0.0.1:3000> in your browser. The dashboard only listens on your own machine.
-
-## Dashboard tabs
-
-- **Overview (`overview`):** The "what's next" line, the current work mode, the session handoff summary, and the slice locks from `.spec/PROGRESS.md`.
-- **Runner (`runner`):** Classifies a shell command against the harness rules, and runs the allow-listed checks (unit tests, typecheck, lint) with saved output.
-- **Subagents (`agents`):** Lists the subagent definitions in `.claude/agents/` and the model each one uses.
-- **Commands (`commands`):** Lists the slash commands in `.claude/commands/`.
-- **Handoff (`handoff`):** Builds a bundle of the repo's state for an outside reviewer, with warnings when it looks stale.
-- **Specs (`specs`):** Edits the registered planning and contract files, with a diff preview before saving.
-- **Spoke sync (`spoke`):** Checks whether a project repo ("spoke") matches the engine files in this hub, and shows a sync dry run.
-- **Security (`security`):** Shows the allow and deny rules in `.claude/settings.json` and the hook pipeline.
 
 ## Running the checks
 
@@ -53,8 +39,7 @@ Then open <http://127.0.0.1:3000> in your browser. The dashboard only listens on
 | `npm run typecheck` | Syntax-checks the harness's `.mjs` files. It does not run the TypeScript compiler. |
 | `npm run lint` | Runs the navigator check, which validates the spec index links and line budgets. It is not a code linter. |
 | `npm test` | Runs the runner-matcher tests. |
-| `node --test .harness/hooks/lib/*.test.mjs .harness/scripts/*.test.mjs .harness/scripts/lib/*.test.mjs` | Runs the full unit test suite. |
-| `npm run build` | Builds the dashboard for production. |
+| `node --test plugins/harness/test/run.test.mjs .harness/hooks/lib/*.test.mjs .harness/scripts/*.test.mjs .harness/scripts/lib/*.test.mjs` | Runs the full unit test suite. |
 
 ## How the harness works
 
@@ -137,7 +122,7 @@ This is an early-stage project, built by one developer working with AI agents. `
 
 ## Security
 
-The dashboard binds to `127.0.0.1` by default, has no login, and can edit a fixed list of planning files. Do not expose it to a network. The dashboard only runs allow-listed commands. The repository contains no secrets, and `.env` files are blocked by the Claude Code settings and by `.gitignore`. See [SECURITY.md](SECURITY.md) to report a vulnerability.
+The Command Center binds to `127.0.0.1` and is read-only. Do not expose it to a network. The repository contains no secrets, and `.env` files are blocked by the Claude Code settings and by `.gitignore`. See [SECURITY.md](SECURITY.md) to report a vulnerability.
 
 ## Contributing
 

@@ -277,7 +277,7 @@ Or leave no issues in Ready. The routine then does nothing.
 |---|---|---|
 | Hosted status page `cchonguyen.github.io/claude-harness-hub` | `status.json` built by `status-snapshot.yml` from `PROGRESS.md` and GitHub | **LIVE**, refreshed every 5 min |
 | Local Command Center `dashboard/command-center.mjs` on port 3456 | Same derived state | **LIVE** on the Mac after a 22-hour restart (5 Nov 10:28 → 6 Nov 08:22) |
-| React dashboard (`server.ts`, `src/`) | Files on disk | **BUILT**, `npm run dev` only |
+| React dashboard (`server.ts`, `src/`) | Files on disk | **RETIRED** in Slice 20.242 |
 | Thread messages and checklists | Agents' own reports | **LIVE**; the operator's real interface |
 
 ---

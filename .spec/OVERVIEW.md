@@ -1,7 +1,7 @@
 # Project Overview (Owner's Manual)
 
 ## What This App Does
-- **Plain English:** This repo is the source of truth for a set of rules, helper scripts, and subagent definitions that keep Claude Code on a tight leash. It is the "hub" that other project repos ("spokes") copy from. It also ships a local dashboard (`npm run dev`) for browsing those rules, running the harness checks, and editing its spec files.
+- **Plain English:** This repo is the source of truth for a set of rules, helper scripts, and subagent definitions that keep Claude Code on a tight leash. It is the "hub" that other project repos ("spokes") copy from. It also ships a read-only status page and a local Command Center (`dashboard/`).
 - **Public-release status:** Being prepared for public visibility. See `README.md` for the orientation guide and `SECURITY.md` for the local-only safety model.
 - Centralized Token-Optimized Claude Code Agent Harness (`claude-harness-hub`).
 
@@ -18,7 +18,7 @@
 - **Stall prevention:** the Stop hook blocks ending a turn while a slice is `[IN_PROGRESS]`, while a PR opened in the session has nothing watching it, while checklist steps are open with nothing to wake the thread, or right after a decision card (Slices 19.1 and 19.196 to 19.205).
 - **Telemetry:** per-session event log and a baseline receipt workflow (Slices 11.1 and 19.3).
 - **Design system:** the Harness UI kit in `.harness/design-system/` (Slices 18.7 to 18.12).
-- **Dashboard:** local React dashboard (`npm run dev`) and a read-only status page published by a scheduled Action (ADR-011).
+- **Dashboard:** a read-only status page published by a scheduled Action, and the local Command Center (ADR-011). The React dashboard was retired in Slice 20.242.
 - **External co-development:** the Antigravity and AI Studio contract is `.spec/EXTERNAL_AGENT_RULES.md`. Antigravity has landed at least one PR (#172).
 - **In Progress:** none.
 
