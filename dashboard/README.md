@@ -21,10 +21,6 @@ The hosted page reloads `status.json` every 60 seconds. The snapshot it shows ca
 
 The page shows slices grouped by status (in progress, open, merged), a "pushed, not on main" section, and a contradiction strip. The strip is a simple client-side check of three rules from `dashboard/lib/contradictions.mjs`.
 
-## Operator dashboard (separate)
-
-`server.ts` and the React app in the repo root are the separate operator dashboard from ADR-006. They are not part of this folder's pages and are not deployed by the status-snapshot workflow.
-
 ## Libraries
 
 - `lib/progress.mjs` parses slice lines from `.spec/PROGRESS.md`.
