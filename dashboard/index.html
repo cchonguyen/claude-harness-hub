@@ -206,11 +206,6 @@
     box.appendChild(flags);
     if (c.badge) box.appendChild(el("div", "badge evidence", c.badge));
     if (c.staleLabel) box.appendChild(el("div", "badge stale", c.staleLabel));
-    if (c.canAccept) {
-      var b = el("button", "primary", "Accept Verified Slice");
-      b.addEventListener("click", function () { accept(c.worktree, b); });
-      box.appendChild(b);
-    }
     if (c.herdrAgentId) {
       var f = el("button", "", "Focus pane");
       f.addEventListener("click", function () { focusAgent(c.worktreeId, c.herdrAgentId); });
@@ -228,13 +223,6 @@
       snap.cards.filter(function (c) { return c.stage === stage; }).forEach(function (c) { col.appendChild(card(c)); });
       board.appendChild(col);
     });
-  }
-
-  function accept(worktree, button) {
-    button.disabled = true;
-    api("/api/slice/accept", { method: "POST", body: { worktree: worktree } }).then(function (r) {
-      msg.textContent = r.ok ? "Slice accepted." : "Not accepted: " + ((r.body && r.body.error) || r.status);
-    }).catch(function () { msg.textContent = "Accept request failed."; });
   }
 
   function focusAgent(worktreeId, paneId) {

@@ -37,10 +37,6 @@ const HERDR_CACHE_MS = 5 * 1000;
 
 const HERE = path.dirname(new URL(import.meta.url).pathname);
 const HARNESS_ROOT = path.resolve(HERE, '..');
-const UPDATE_SCRIPT = path.join(HARNESS_ROOT, 'bin', 'update-state.mjs');
-// Secret from HARNESS_VERIFY_SECRET or ~/.config/vibe-command-center/verify-secret (not in the repo).
-const INTERNAL_SECRET = process.env.HARNESS_VERIFY_SECRET?.trim() ||
-  (() => { try { return fs.readFileSync(path.join(os.homedir(), '.config', 'vibe-command-center', 'verify-secret'), 'utf8').trim(); } catch { return ''; } })();
 const REPOS_FILE = path.join(os.homedir(), '.config', 'vibe-command-center', 'repos.json');
 const TASKS_DIR = path.join(os.homedir(), '.claude', 'tasks');
 const HTML_FILE = path.join(HERE, 'index.html');
@@ -277,8 +273,6 @@ async function buildSnapshot() {
     const updatedMs = state?.updatedAt ? Date.parse(state.updatedAt) : NaN;
     const stale = Number.isFinite(updatedMs) && now - updatedMs > STALE_MS && herdr.state === 'Offline';
     const ver = state?.verification || null;
-    // Verification and acceptance are still per worktree: only the worktree-level stage can be accepted.
-    const canAccept = state?.stage === 'Verified' && ver?.testsPassing === true && ver?.evidenceCommitSha === currentHeadSha;
     const worktreeStage = state?.stage && STAGES.includes(state.stage) ? state.stage : 'Design';
 
     // One card per active slice; a worktree with no slices gets one card for its worktree-level stage.
@@ -328,7 +322,6 @@ async function buildSnapshot() {
         pendingDecisions: Array.isArray(state?.pendingDecisions) ? state.pendingDecisions.length : 0,
         verification: !isProgressOnly && ver ? { testsPassing: ver.testsPassing, evidenceCommitSha: ver.evidenceCommitSha } : null,
         currentHeadSha,
-        canAccept: isProgressOnly ? false : canAccept,
         herdr: herdr.state,
         herdrAgentId: herdr.agentId,
         handoffUpdatedAt: fileMtime(path.join(wt.path, '.spec', 'HANDOFF_PACKET.md')),
@@ -391,36 +384,6 @@ async function rediscoverAndRefresh() {
 }
 
 // ---------- routes ----------
-
-async function handleAccept(req, res) {
-  if (!INTERNAL_SECRET) return send(res, 500, { error: 'no verify secret configured' });
-  let body;
-  try {
-    body = await readBody(req);
-  } catch {
-    return send(res, 400, { error: 'invalid JSON' });
-  }
-  const wt = worktrees.find((w) => w.path === body.worktree);
-  if (!wt) return send(res, 403, { error: 'unknown worktree' });
-
-  const state = readSpecJson(wt.path, 'STATE.json');
-  const head = await headSha(wt.path);
-  if (!state) return send(res, 409, { error: 'no STATE.json' });
-  if (state.verification?.testsPassing !== true) return send(res, 409, { error: 'tests not passing' });
-  if (state.verification?.evidenceCommitSha !== head) return send(res, 409, { error: 'HEAD does not match verified SHA' });
-
-  try {
-    const { stdout } = await execFileP(
-      process.execPath,
-      [UPDATE_SCRIPT, '--stage', 'Accepted', '--internal-key', INTERNAL_SECRET],
-      { cwd: wt.path, timeout: 10000 }
-    );
-    broadcast();
-    return send(res, 200, { ok: true, output: stdout.trim() });
-  } catch (e) {
-    return send(res, 500, { error: 'update-state failed', detail: String(e.stderr || e.message).slice(0, 300) });
-  }
-}
 
 async function handleHerdrFocus(req, res) {
   let body;
@@ -493,7 +456,6 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  if (req.method === 'POST' && url.pathname === '/api/slice/accept') return handleAccept(req, res);
   if (req.method === 'POST' && url.pathname === '/api/herdr/focus') return handleHerdrFocus(req, res);
 
   return send(res, 404, { error: 'not found' });
