@@ -1,4 +1,4 @@
-# Protocol Contract: Structured Review Relay (Dewey 340)
+# Protocol Contract: Structured Review Relay (Atlas Sector 340)
 
 Defines structured code review exchange, audit verdicts, and pull request gating.
 

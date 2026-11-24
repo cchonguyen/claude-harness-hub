@@ -7,8 +7,8 @@ These rules load into every thread. Repo `.claude/` hooks, agents and commands n
 - Slice `[IN_PROGRESS]` with clear `Target files:`: dispatch `harness:gf-coder` with the slice line and the exact verify command. You review its report, then run verification and finish the slice yourself.
 - Requirements unclear, `Target files:` unknown, or `.spec/BLACK_BOX.md` exists: dispatch `harness:el-architect`.
 - Exploring unfamiliar code: dispatch `harness:gf-navigator`.
-- The plugin's hooks enforce a fast-path budget in the main thread: 3 source reads, 1 search, 1 edit of at most 25 lines. A `FAST-PATH BUDGET EXCEEDED` warning means delegate. Never work around it with Bash.
-- Multi-file edits in the main thread: dispatch `harness:gf-coder` from the start. Do not make a second source edit and wait for the fast-path block.
+- The plugin's hooks track a fast-path budget in the main thread: 3 source reads, 1 search, 1 edit of at most 25 lines. Going over does not block. The `FAST-PATH BUDGET EXCEEDED` warning goes only to the hook's stderr and the event log, so you will not see it. Count for yourself and delegate before you go over. Never work around the budget with Bash.
+- Multi-file edits in the main thread: dispatch `harness:gf-coder` from the start. Do not make a second source edit first.
 
 ## Working style
 - Reply with the result first. Use short sentences and no filler.
@@ -59,7 +59,7 @@ Slice colour tags: `[UI / VISUAL]` needs typecheck only. `[CORE / DATA]` needs t
 - Auto-merge standing rule (applies to every project through the harness plugin): when a pull request is green (all required checks passing, not a draft) and the operator has already approved the work, merge it automatically without waiting for a click. Ask only if the work is not approved, checks are red or missing, or the merge would revert or overwrite something the operator has not approved.
 - Before asking the operator who merged a pull request, check the merge record on GitHub (merger and merge time). Ask only when the record does not show it. Never ask about a merge the operator has already made.
 - Put the typecheck, lint and test results in the pull request description.
-- The `Harness slice gate` check must pass. It needs a slice line in `.spec/PROGRESS.md` and a head commit with Referee trailers. A quick fix or a vibe-mode change will show red, by design. A docs-only PR (every file Markdown, under `docs/`, or under `.spec/`) passes without a slice or trailer.
+- The `Harness slice gate` check must pass in spokes (the hub hosts the gate but does not run it on its own PRs yet). It needs a slice line in `.spec/PROGRESS.md` and a head commit with Referee trailers. A quick fix or a vibe-mode change will show red, by design. A docs-only PR (every file Markdown, under `docs/`, or under `.spec/`) passes without a slice or trailer.
 - Use the pull request template if the repo has one.
 - A plan file in `.spec/plans/` is the operator's approval for the slices it lists. Merging it accepts them (see `.spec/plans/README.md`). No per-slice accept step is needed.
 - Slice-sized work gets one pull request. Do not split same-file or same-actor work across pull requests (standing rule, Charlie).

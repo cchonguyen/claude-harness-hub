@@ -3,7 +3,7 @@
 The single entry point and registry for harness-hub specification artifacts. Definition and rules: [docs/CONTEXT_ATLAS.md](../docs/CONTEXT_ATLAS.md).
 
 ## Sector 000 Card Catalog
-- `000` [CLAUDE.md](../CLAUDE.md) — 5-line pointer to agent instructions
+- `000` [CLAUDE.md](../CLAUDE.md) — Rules that load into every Claude Code thread
 - `010` [AGENTS.md](../AGENTS.md) — Universal agent catalog & role definitions
 - `020` [docs/CONTEXT_ATLAS.md](../docs/CONTEXT_ATLAS.md) — Atlas definition & rules
 
@@ -33,8 +33,8 @@ The single entry point and registry for harness-hub specification artifacts. Def
 - `430` [.spec/AI_STUDIO_RULES.md](AI_STUDIO_RULES.md) — AI Studio rules template
 - `440` [.spec/plans/README.md](plans/README.md) — Plan-merge approval format
 - `441` [.spec/plans/harness-doctor-phase1.md](plans/harness-doctor-phase1.md) — Phase 1 doctor and telemetry plan (slices 10.1, 10.2)
-- `445` [.spec/plans/on-the-fly-slices.md](plans/on-the-fly-slices.md) — On-the-fly slices plan (slices 18.1 to 18.3)
 - `442` [.spec/post-mortems/dispatch-telemetry-2026-11-06.md](post-mortems/dispatch-telemetry-2026-11-06.md) — Dispatch telemetry post-mortem and gate-off record (slice 10.8)
 - `443` [.spec/post-mortems/harness-council-review-2026-11-06.md](post-mortems/harness-council-review-2026-11-06.md) — Post-mortem and questions for external council review
 - `444` [.spec/SCOUT.md](SCOUT.md) — Latest /triage scout metrics (files touched, contract change, cross-module)
+- `445` [.spec/plans/on-the-fly-slices.md](plans/on-the-fly-slices.md) — On-the-fly slices plan (slices 18.1 to 18.3)
 - `446` [.spec/plans/harness-consistency.md](plans/harness-consistency.md) — One consistent harness for all repos (slices 19.1 to 19.3)

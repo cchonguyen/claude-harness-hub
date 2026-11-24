@@ -1,3 +1,5 @@
+> **Historical (Nov 2026 spike).** This log was never filled in. The local-first spike it measured was overtaken by cloud threads (ADR-011). Kept for the record; nothing reads it.
+
 # Spike Dogfooding Metrics Log (Day 2: Hours 19–48)
 
 ## Purpose & Falsification Criteria
