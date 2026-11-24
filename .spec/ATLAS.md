@@ -39,3 +39,4 @@ The single entry point and registry for harness-hub specification artifacts. Def
 - `445` [.spec/plans/on-the-fly-slices.md](plans/on-the-fly-slices.md) — On-the-fly slices plan (slices 18.1 to 18.3)
 - `446` [.spec/plans/harness-consistency.md](plans/harness-consistency.md) — One consistent harness for all repos (slices 19.1 to 19.3)
 - `447` [.spec/plans/harness-lean.md](plans/harness-lean.md) — Lean harness plan (slices 20.1 to 20.10)
+- `448` [.spec/plans/harness-lean-followups.md](plans/harness-lean-followups.md) — Settled audit decisions (slices 20.241, 20.242)
