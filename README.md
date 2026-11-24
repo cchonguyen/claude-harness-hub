@@ -63,6 +63,7 @@ Then open <http://127.0.0.1:3000> in your browser. The dashboard only listens on
 - **Subagents** are narrow helpers, such as a planner, an engineer, or an auditor, each with limited tools and a chosen model.
 - **Referee trailers** are verification lines at the bottom of a git commit message. They record that the checks passed for that exact tree of files.
 - **Spokes** are project repositories that copy the engine files from this hub. `.harness/scripts/hub-sync.mjs` handles the copy. See the "Spoke Connection Contract" in `.spec/SYSTEM_SPEC.md`.
+- **Most guards warn instead of blocking.** Only a short list refuses outright: force pushes, branch deletes, deploys, visibility changes, a second `[IN_PROGRESS]` slice, and edits to engine files inside a spoke. `.spec/HARNESS_SPEC.md` section 5 lists which is which.
 
 Some notes mention Google Antigravity, Google AI Studio, or Gemini. Those are other AI tools the harness can hand a task to. They are optional, and the core harness does not depend on them.
 
@@ -75,7 +76,7 @@ To turn it on for a project:
 2. Select **Setup script**, paste the contents of `plugins/harness/setup-script.sh`, and click **Save changes**.
 3. Start a new thread and ask whether `harness:gf-coder` is in its agent list.
 
-The environment caches setup for about seven days. A plugin change on `main` reaches threads after you edit the script or the cache rebuilds.
+The environment caches setup for about seven days. A plugin change on `main` reaches threads when the cache rebuilds. In a thread that has this hub repo attached, the plugin's SessionStart hook (`plugins/harness/hooks/refresh.mjs`) also copies `plugins/harness` over the installed copy when the repo's plugin version is higher, so bump `version` in `plugins/harness/.claude-plugin/plugin.json` with any plugin change.
 
 ## Architecture: Elephant, Falcon, Goldfish
 
@@ -107,11 +108,11 @@ Each file the agents read has a numbered coordinate. A slice in `.spec/PROGRESS.
 
 | Sector | Files |
 | --- | --- |
-| `000` Card Catalog | `AGENTS.md` (010), `CLAUDE.md` (a shim that loads `AGENTS.md`) |
+| `000` Card Catalog | `CLAUDE.md` (000, the rules every thread loads), `AGENTS.md` (010) |
 | `100` Work logs | `.spec/PROGRESS.md` (110), `.spec/archive/HISTORY.md` (120), `.spec/BLACK_BOX.md` (130, only after a failure) |
 | `200` Boundaries | `.spec/boundaries/locks.md` (210), `.spec/boundaries/do-not-build.md` (220) |
 | `300` Contracts | `.harness/config/thresholds.json` (305), referee (310), circuit breaker (320), baton pass (330), review relay (340) |
-| `400` System spec | `.spec/SYSTEM_SPEC.md` |
+| `400` System spec | `.spec/SYSTEM_SPEC.md` (400, design intent), `.spec/HARNESS_SPEC.md` (401, as built), `.spec/DECISIONS.md` (410), plans and post-mortems (440 and up) |
 
 Most Atlas files have a soft line cap in `thresholds.json`. `npm run lint` reports any file that goes over its cap. The full definition, including the staleness rule, is in [docs/CONTEXT_ATLAS.md](docs/CONTEXT_ATLAS.md).
 
@@ -119,15 +120,17 @@ Most Atlas files have a soft line cap in `thresholds.json`. `npm run lint` repor
 
 - **Hook adapter (`.harness/hooks/adapter.mjs`):** Converts tool calls from Claude Code (`.claude/settings.json`) and Antigravity (`.agents/hooks.json`) into one format, so both tools run the same guard scripts.
 - **Two-strike circuit breaker (`freeze-black-box.mjs`):** If `gf-coder` makes 2 exploratory searches or fails its tests twice, the script writes the diff and the error output to `.spec/BLACK_BOX.md`. It then stashes the changes as `black-box/<slice-id>` and hands the slice back to `el-architect`.
-- **Finishing a slice (`finish-slice.mjs`, `navigator.mjs`, `referee.mjs`):** Checks that the changes stayed within the slice's scope and adds Referee trailers to the commit: the verdict, the tree, and a SHA-256 hash of the engine. It then moves the finished slice to `HISTORY.md` and marks the next pending slice as in progress, all in one commit.
+- **Finishing a slice (`finish-slice.mjs`, `referee.mjs`):** Marks the slice `[x]` in `.spec/PROGRESS.md` and commits with Referee trailers: the verdict, the tree, and a SHA-256 hash of the engine. Files changed outside the slice's `Target files:` do not block the finish; they are recorded in a `Scope-Widened:` trailer. It does not start the next slice (owner decision, 2026-11-06). Archiving finished slices to `HISTORY.md` is a separate step: `node .harness/scripts/navigator.mjs --archive`.
 
 ### Slice commands
 
 ```bash
 node .harness/scripts/hub-sync.mjs                 # regenerate agent definitions
-node .harness/scripts/start-slice.mjs "Slice X.Y"  # anchor a new milestone's first slice
-node .harness/scripts/finish-slice.mjs "<msg>"     # verify, commit, archive, advance
+node .harness/scripts/start-slice.mjs "X.Y"        # mark a pending slice [IN_PROGRESS] and anchor it
+node .harness/scripts/start-slice.mjs --adhoc ...  # open an on-the-fly slice (see CLAUDE.md, Work modes)
+node .harness/scripts/finish-slice.mjs "<msg>"     # verify, mark [x], commit with Referee trailers
 node .harness/scripts/navigator.mjs --check        # Atlas link and line-budget check
+node .harness/scripts/navigator.mjs --archive      # move finished slices to HISTORY.md
 node .harness/scripts/pr-scope-check.mjs           # PR scope gate
 ```
 

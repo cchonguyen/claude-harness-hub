@@ -3,6 +3,7 @@
 **Status:** authoritative description of what runs today. Written for an external reviewer or agent with no prior context.
 **Snapshot:** `main` at `c595c43` (PR #117), harness `3.2.0` (`.harness-version`), plugin `0.3.0` (`plugins/harness/.claude-plugin/plugin.json`), 327 unit tests.
 **Supersedes for "what runs":** `.spec/SYSTEM_SPEC.md` sections 4 and 5, which are design contracts. Where the two disagree, this file describes the code and SYSTEM_SPEC describes intent. Section 14 lists every known disagreement.
+**Freshness:** sections 1 to 13 describe `main` on 2026-11-06. Section 14a lists what changed in the drift register by 2026-11-24. For later behavior, trust the code and `.spec/OVERVIEW.md`.
 **Companion:** the critical assessment is in `.spec/post-mortems/harness-council-review-2026-11-06.md`.
 
 Status legend used below:
@@ -304,6 +305,25 @@ Or leave no issues in Ready. The routine then does nothing.
 | Setup script "exits non-zero on failure" (snag plan Stage 1) | Still `exit 0` | `plugins/harness/setup-script.sh` |
 | `bin/restart-dashboard.sh` allow-listed (Phase 2, slice 5) | File does not exist | `bin/` |
 | Slice 11.11 removes Referee trailer checks (operator "Yes." at 02:25:27) | Never landed; classifier denied the edit | thread `cmsg_…D9oAkbs9h3KP6pwhqY11JH` |
+
+### 14a. Drift register status (checked 2026-11-24, `main` at aea17d8)
+
+| Row above | Status |
+|---|---|
+| CLAUDE.md "enforce a fast-path budget" | Fixed in the docs audit PR: CLAUDE.md now says the budget warns to stderr only |
+| "The `Harness slice gate` check must pass" | Still open in the hub. The reusable gate lives here (`.github/workflows/harness-gate.yml`, Slice 19.2) and spokes call it, but no hub workflow calls it. PR #208 ran `pr-check`, `checks`, `verify`, `status` and `record`, with no gate check |
+| Banner "Model tier: Haiku baseline" | Fixed in the docs audit PR (`session-start.mjs`) |
+| Stale Antigravity handoff | Went stale again after PR #172; rewritten in the docs audit PR |
+| SYSTEM_SPEC 4 "not yet built" | Fixed in the docs audit PR |
+| SYSTEM_SPEC 5.A.3 Guard 0 | Guard 0 is gone from the code; SYSTEM_SPEC now says so. `SCOUT.md` exists since 2026-11-12 |
+| OVERVIEW "Up Next" | Rewritten to current state in the docs audit PR |
+| PROGRESS line cap vs bytes | No longer biting: finished slices are archived and PROGRESS.md is short |
+| Missing checkboxes, duplicate ids | Fixed (Slices 12.1 and 19.7) |
+| Stop hook inert | Fixed: rewritten in Slices 19.1 and 19.196 to 19.205 |
+| Setup script exits 0 on failure | Still open |
+| `bin/restart-dashboard.sh` allow-listed | Still open: the file does not exist and `main-thread-guard.mjs` still allow-lists it |
+| Slice 11.11 removes Referee checks | Still not landed; Referee trailers are stamped and checked |
+| Soft-gate warnings unseen by the model (section 5.3) | Partly fixed (Slice 19.1): PLAN LOCK and SCOPE LOCK now reach the model as additionalContext. Fast-path, main-thread and doctor warnings still go to stderr only |
 
 ---
 

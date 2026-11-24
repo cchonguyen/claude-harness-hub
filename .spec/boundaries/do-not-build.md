@@ -1,4 +1,4 @@
-# Boundary Contract: Strictly Out of Scope (Dewey 220)
+# Boundary Contract: Strictly Out of Scope (Atlas Sector 220)
 
 Invariants and explicit "Do NOT Build" boundaries for the harness-hub ecosystem.
 

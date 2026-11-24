@@ -1,4 +1,4 @@
-# Protocol Contract: Dual-Platform Baton Pass (Dewey 330)
+# Protocol Contract: Dual-Platform Baton Pass (Atlas Sector 330)
 
 Defines asynchronous handoffs and cross-platform relay protocols between Claude and Antigravity/Gemini.
 

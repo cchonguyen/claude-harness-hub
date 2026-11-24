@@ -2,11 +2,11 @@
 
 Shared template for Claude Code, Google Antigravity, and Google AI Studio. Every platform overwrites this file with the same five fields, in this order, before it pushes.
 
-- **Last Active Platform:** Google Antigravity
-- **Active Branch / State:** `fix/accept-plan-realpath` from `main` at e46c89f (PR #172). No slice in progress.
-- **Files Modified in Last Turn:** `.harness/scripts/accept-plan.mjs`, `.spec/SESSION_HANDOFF.md`
-- **Verification Status:** Verified via finish-slice.mjs (Slice 19.207)
-- **Immediate Next Step for Claude:** Continue from `main` after `fix/accept-plan-realpath` is merged.
+- **Last Active Platform:** Claude Code
+- **Active Branch / State:** `claude/project-thread-5qde86` from `main` at aea17d8 (PR #208). Docs and descriptive-text audit.
+- **Files Modified in Last Turn:** docs, specs and rules across `.spec/`, `CLAUDE.md`, `README.md`, `.claude/`, plus the session-start banner text.
+- **Verification Status:** Verified via finish-slice.mjs (Slice 19.209)
+- **Immediate Next Step for Claude:** Continue from `main` once the audit pull request is merged.
 - **Active Slice:** none
-- **Branch Owner:** antigravity
-- **Audit Status:** CLEAN
+- **Branch Owner:** claude
+- **Audit Status:** none

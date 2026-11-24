@@ -3,6 +3,8 @@ description: Close a slice safely. Runs the verification gate and requires at le
 allowed-tools: Read, Write, Edit, Bash(node bin/update-state.mjs*), Bash(bash bin/verify-slice.sh*), Bash(git rev-parse*), Bash(git status*)
 disable-model-invocation: true
 ---
+> **Legacy (v2.2 local Command Center).** This flow writes `.spec/STATE.json` through `bin/update-state.mjs` and never stamps Referee trailers. To close a slice so its pull request passes the slice gate, run `node .harness/scripts/finish-slice.mjs "<msg>"` (see CLAUDE.md, Finishing a slice).
+
 1. Run the verification gate: `bash bin/verify-slice.sh`. Report its exact output. If it exits non-zero, stop. Do not mark the slice complete.
 2. Check for recorded decisions. Read `.spec/STATE.json` and count `recentDecisions`.
    - If the count is zero, do not ask. Run `node bin/update-state.mjs --bypass-decisions 'No architectural decision in this slice; logged by default'` and report it in the receipt. If a human has given a decision in this thread, record it with `--add-recent` instead, as the step already says.

@@ -1,3 +1,5 @@
+> **Superseded in part (2026-11-05, ADR-011).** Agents now run in cloud threads, so the gitignored `.spec/STATE.json` rows of the ownership matrix (1.1 rows 2, 4 and 5) no longer apply: slice state is derived from `origin/main` `PROGRESS.md` and GitHub. Kept as the historical plan for the local Command Center spike.
+
 # Master Implementation Plan: Vibe Coding Command Center (v2.2)
 
 ## Architectural Gate: Conditional Approval Incorporated

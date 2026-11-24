@@ -22,7 +22,7 @@
   1. A research memo comparing the mirror options (one-way from PROGRESS.md to Issues, then Linear through its GitHub integration or a sync the owner runs), with a status mapping table.
   2. A gap audit of the existing slice record. PROGRESS.md has 56 slice lines: 43 carry `- [x]` and 13 have no checkbox (10.4 to 10.9, 11.1, 11.13 to 11.15, 11.16a, 11.17), so their status is not machine-readable. Slice IDs 10.7 and 11.9 each appear twice with different targets, which breaks a stable Issue key. There are no `- [ ]` or `[IN_PROGRESS]` lines today. `finish-slice.mjs` (about line 276) strips `[IN_PROGRESS]` and leaves unboxed lines, which is the likely cause.
   3. Grilling questions the owner answers before any build.
-- **Decisions still open:** source of truth (recommended: PROGRESS.md on `main`, with ADR-011 deriving state from PRs and checks); sync direction (recommended: one-way); whether "awaiting approval" maps to the existing accept-plan flow or a new label; whether Issues live in the hub, in each spoke, or both; whether to renumber the duplicate 10.7 before any Issue keys exist; backfill of finished slices or new slices only; Linear's native GitHub integration or a sync the owner controls.
+- **Decisions (open at triage, answered by the owner on 2026-11-11 and built in Stages 13 to 17):** these were the questions: source of truth (recommended: PROGRESS.md on `main`, with ADR-011 deriving state from PRs and checks); sync direction (recommended: one-way); whether "awaiting approval" maps to the existing accept-plan flow or a new label; whether Issues live in the hub, in each spoke, or both; whether to renumber the duplicate 10.7 before any Issue keys exist; backfill of finished slices or new slices only; Linear's native GitHub integration or a sync the owner controls.
 
 ### Scope Brief (triaged 2026-11-03: making the repo public)
 - **Core User Problem:** The owner needs to switch this repository from private to public without leaking private data, and needs a repo that a stranger can understand and run within minutes.
@@ -91,8 +91,8 @@ The dashboard derives state and never reads agent-written state files. Its sourc
 
 The hosted status page reads only the published `status.json`. The local Command Center reads the same derived state on port 3456. Each card shows its source and age, and disagreements between sources are listed, not resolved silently. See [ADR-011](DECISIONS.md).
 
-## 4. Harness v3.0 "Manager Mode" Contract (locked 2026-11-01, not yet built)
-Source: Claude review of the v3.0 RFC, operator decisions, and the Antigravity adversarial review (ADR-008). Build order is in `.spec/PROGRESS.md` (Slices 3.0 to 3.5). Until those slices ship, sections 1 to 3 above describe what actually runs.
+## 4. Harness v3.0 "Manager Mode" Contract (locked 2026-11-01, built in Slices 3.0 to 3.5)
+Source: Claude review of the v3.0 RFC, operator decisions, and the Antigravity adversarial review (ADR-008). Those slices shipped (see `.spec/archive/HISTORY.md`). Several locks below were later softened to warnings (Slices 11.4 to 11.12 and 12.4). Where this section says "blocks" or "refuses", check `HARNESS_SPEC.md` section 5 for what runs today.
 
 ### 4.A Work modes and engine lock
 1. **Mode switch.** Spoke-owned `.spec/harness.json` holds `{ "workMode": "manager" | "vibe" }`. `hub-sync.mjs init` writes `manager`. A spoke with no file keeps `vibe`, so v2.2 spokes do not change behavior on upgrade. In `manager`, 0 `[IN_PROGRESS]` slices blocks edits outside `.spec/` with `PLAN LOCK: No task is marked [IN_PROGRESS] in .spec/PROGRESS.md. Run /triage or /spec first.` `modeOf()` returns `'locked'` for that case. As built, the lock is a warning (HARNESS_SPEC section 5) and the `plan_lock_warn` event is logged. From Slice 18.3 the warning text is `WARN: PLAN LOCK: No task is marked [IN_PROGRESS] in .spec/PROGRESS.md. Run /spec, or open an on-the-fly slice: node .harness/scripts/start-slice.mjs --adhoc (see CLAUDE.md, Work modes).` Only the text changes. The lock does not get weaker, and it is satisfied only by a real `[IN_PROGRESS]` line.
@@ -165,6 +165,7 @@ Source: Operator RFC, Antigravity adversarial review, and Claude architectural r
    - **Hard Rule: Opus is never used for Goldfish work.**
 3. **Dispatch Sizing & Mechanical Guard:**
    - Guard 0 in `pre-tool-guard.mjs` mechanically verifies subagent dispatch against `.spec/SCOUT.md`: `architect-opus` is blocked unless `SCOUT.md` specifies Level 3, and `engineer-sonnet` is blocked unless `SCOUT.md` specifies Level 2 or 3.
+   - **Status:** Guard 0 is no longer in `pre-tool-guard.mjs`; nothing checks dispatch against `SCOUT.md`. The `architect-opus` and `engineer-sonnet` agents live only in `.claude/agents/`, which project threads do not load.
    - Agents announce dispatch on Line 1: `🐘 Dispatching Elephant subagent (<name>)...` or `🐠 Dispatching Goldfish subagent (<name>)...`.
 
 ### 5.B Neutral Referee & Verification Trailers

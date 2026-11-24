@@ -1,13 +1,10 @@
 # Active Slice Queue (Atlas Sector 110)
 
 
-## Stage 12 to 15: Harness as scrum master (approved by Charlie 2026-11-11 21:44 UTC, auto-merge when green)
-Plan and rationale: https://claude.ai/artifact/A9N5osaQ7A8fgiBSobWfir. Philosophy: the harness guides through telemetry and grooming; it blocks only irreversible actions.
-
-
 ## Stage 19: One consistent harness for all repos (plan: .spec/plans/harness-consistency.md, approved by merge)
 - [x] **Slice 19.199: Stop hook ignores closed or merged PRs** [CORE / DATA] On-the-fly: Coordinator bug report: hook flagged closed PR #480 Target files: .harness/hooks/stop-guard.mjs, .harness/hooks/lib/stop-guard.test.mjs | Issue: #199 | Verify: node --test .harness/hooks/lib/stop-guard.test.mjs
 - [x] **Slice 19.201: Stop hook blocks idling with unfinished checklist steps and no wake** [CORE / DATA] On-the-fly: Coordinator: threads stall after stating a next step Target files: .harness/hooks/stop-guard.mjs, .harness/hooks/lib/stop-guard.test.mjs, .claude/harness-rules.md | Issue: #201 | Verify: node --test .harness/hooks/lib/stop-guard.test.mjs
 - [x] **Slice 19.203: Stop hook catches I'll-check and decision-card stalls** [CORE / DATA] On-the-fly: Charlie: threads keep stalling; tours thread transcript shows two stops the Stop hook missed Target files: .harness/hooks/stop-guard.mjs, .harness/hooks/lib/stop-guard.test.mjs | Issue: #203 | Verify: node --test .harness/hooks/lib/stop-guard.test.mjs
 - [x] **Slice 19.205: Stop hook wake search starts at the stated step's turn** [CORE / DATA] On-the-fly: Replay of the real tours transcript: the 17:53 stall still passed after #204 Target files: .harness/hooks/stop-guard.mjs, .harness/hooks/lib/stop-guard.test.mjs | Issue: #205 | Verify: node --test .harness/hooks/lib/stop-guard.test.mjs
 - [x] **Slice 19.207: Scope check reads approvals from the PR head on a CI merge commit** [CORE / DATA] On-the-fly: Bug: CI merge commit hides Approved-Tripwire trailers (Concert-Tracker PR #592) Target files: .harness/scripts/pr-scope-check.mjs, .harness/scripts/pr-scope-check.test.mjs | Issue: #207 | Verify: node --test .harness/scripts/pr-scope-check.test.mjs
+- [x] **Slice 19.209: Session banner and gf-coder close step match the code** [UI / VISUAL] On-the-fly: Charlie: audit tooltips, instructions and descriptive text Target files: .harness/hooks/session-start.mjs, plugins/harness/agents/gf-coder.md, plugins/harness/.claude-plugin/plugin.json | Issue: #209 | Verify: node --test plugins/harness/test/run.test.mjs plugins/harness/test/refresh.test.mjs .harness/hooks/lib/session-banner.test.mjs

@@ -1,4 +1,4 @@
-# Protocol Contract: Neutral Referee & Verification Trailers (Dewey 310)
+# Protocol Contract: Neutral Referee & Verification Trailers (Atlas Sector 310)
 
 Defines the neutral arbiter protocol, Git commit trailer specification, and tree integrity verification.
 
@@ -13,6 +13,12 @@ When a slice passes verification, `finish-slice.mjs` formats and commits the sli
 - `Referee-Verdict: VERIFIED` — Attests that all verification checks passed.
 - `Referee-Tree: <tree-sha>` — Tree SHA from `git rev-parse HEAD^{tree}`, locking exact repository content.
 - `Referee-Engine: <referee-sha256>` — SHA-256 hash of the `referee.mjs` script that evaluated the slice.
+
+It adds two more trailers when they apply, and warns instead of refusing:
+- `Scope-Widened: <files>` — files changed outside the slice's `Target files:`.
+- `Main-Thread-Writes: <files>` — source files the main thread wrote instead of a subagent.
+
+Never type these trailers by hand. After merging `main` into a branch, `finish-slice.mjs --restamp` re-stamps the head once tests pass.
 
 ## 3. Audit Marker Threat Model
 The `Referee-*` commit trailers operate as deterministic audit markers and tree integrity fingerprints:
