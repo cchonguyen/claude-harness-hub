@@ -4,7 +4,7 @@ This folder holds the two status views for the harness, plus the libraries behin
 
 ## Command Center (local)
 
-`dashboard/command-center.mjs` is the local Command Center. It runs on port 3456 and reads Git and GitHub to show slice state, open pull requests, and freshness or contradiction warnings. It serves `dashboard/index.html` with a per-run token placeholder. Acceptance clicks happen here ("Accept Verified Slice" at http://127.0.0.1:3456/). The verify secret lives only on the operator's machine.
+`dashboard/command-center.mjs` is the local Command Center. It runs on port 3456 and reads Git and GitHub to show slice state, open pull requests, and freshness or contradiction warnings. It serves `dashboard/index.html` with a per-run token placeholder. It is read-only: slices are accepted by merging their pull request.
 
 ## Hosted status page (read-only)
 
