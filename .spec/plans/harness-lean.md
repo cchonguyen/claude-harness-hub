@@ -5,6 +5,10 @@
 - slice: 20.4
 - slice: 20.5
 - slice: 20.6
+- slice: 20.7
+- slice: 20.8
+- slice: 20.9
+- slice: 20.10
 
 Make the harness smaller and easier to trust without losing what works. Approved by Charlie on 2026-11-24 ("Let's go with your recommendations ... simplify whenever possible, remove friction or redundancy, and keep the harness lean and adaptable"), after the audit in `docs/AUDIT_2026-11-24.md` (PR #210). Slice ids continue after 19.209.
 
@@ -36,6 +40,12 @@ Make the harness smaller and easier to trust without losing what works. Approved
 - **20.5** Hook messages say what actually happens (#215). No "refused" for calls that go ahead, no unreachable commands in messages, no stale allow-list entries, no duplicate threshold keys.
 - **20.6** `/learn` writes the spoke's own rules file (#216).
 
+- **20.7** One way to close a slice (#221). Retire `bin/verify-slice.sh`, `bin/accept-slice.sh`, `/wrap` and the gf-coder `update-state` close steps.
+- **20.8** Retire the STATE.json writer (#222). `bin/update-state.mjs`, `hooks/git-post-checkout`, the v2.2 schema, and the Command Center endpoints that use them.
+- **20.9** Retire the v3.1 agents and upshift routing (#223).
+- **20.10** One telemetry store (#224). Stop writing `STATUS_BATCH.jsonl`; `.spec/.events/` is the record.
+
+Slices 20.7 to 20.10 were added after Charlie chose "Retire them" on the decision card (2026-11-24 14:51 UTC).
+
 ## Left for a separate decision
-- Retiring the v2.2 local flow (`bin/update-state.mjs`, `verify-slice.sh`, `accept-slice.sh`, `/wrap`, the `gf-coder` close steps that call them), the seven v3.1 agents in `.claude/agents/`, and the `STATUS_BATCH` telemetry. These remove features that may still be used in local sessions.
 - Which dashboard to keep, whether Slice 11.11 is still wanted, and whether the hub should run the slice gate on its own PRs.
