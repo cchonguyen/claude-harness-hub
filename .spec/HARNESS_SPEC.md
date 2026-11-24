@@ -176,7 +176,7 @@ Naming: `CLAUDE.md` calls the main thread "the main thread"; `AGENTS.md` calls i
 | `.spec/.session-telemetry.json` | `post-tool-telemetry`, `pre-tool-guard`, `finish-slice` | `finish-slice`, doctor | Container | No |
 | `/tmp/harness-session-state.json` | `session-start.mjs`, `doctor.mjs` | `pre-tool-guard`, `bash-guard` | Container | No |
 | `.spec/.vibe-checkpoint.json`, `refs/harness/*` | `vibe.mjs` | `--restore` | Container | No |
-| `.spec/STATUS_BATCH.jsonl` | `status-batch.mjs` | `/brief` | Container | No |
+| `.spec/STATUS_BATCH.jsonl` | retired in Slice 20.10; `status-batch.mjs` now writes to `.spec/.events/` | none | Container | No |
 | `status.json` on GitHub Pages | `status-snapshot.yml` every 5 min and after automerge | Hosted status page | Permanent | Pages branch |
 | `/mnt/project-files/harness-hub/**` | Threads | Threads, operator | Project | No (shared folder) |
 | Project memory `team/silo/*.md` | Threads, coordinator | Every session at start | Project | No |

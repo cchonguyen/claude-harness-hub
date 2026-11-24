@@ -35,13 +35,15 @@ export function parseActiveTargets(line) {
     .filter(Boolean);
 }
 
+// The event store (.spec/.events/) is session-local and never committed, even where .gitignore misses it.
+const isEventLog = (rel) => rel.replace(/\\/g, '/').startsWith('.spec/.events/');
+
 export function isTargetMatch(relFile, targets) {
   const norm = relFile.replace(/\\/g, '/');
   const trackingFiles = [
     '.spec/PROGRESS.md',
     '.spec/SESSION_HANDOFF.md',
     '.spec/.session-telemetry.json',
-    '.spec/STATUS_BATCH.jsonl',
   ];
   if (trackingFiles.includes(norm)) return true;
 
@@ -215,7 +217,7 @@ export function finishSlice(root, commitMsg, options = {}) {
   // 2. Enforce scope neutrality before modifying or staging files
   const statusOut = execFileSync('git', ['status', '--porcelain'], { cwd: root, encoding: 'utf8' });
   const statusLines = statusOut.split('\n').filter(Boolean);
-  const changedFiles = statusLines.map((l) => l.slice(2).trim().replace(/.* -> /, ''));
+  const changedFiles = statusLines.map((l) => l.slice(2).trim().replace(/.* -> /, '')).filter((f) => !isEventLog(f));
 
   const outOfScope = changedFiles.filter((f) => !isTargetMatch(f, targets));
   if (outOfScope.length > 0) {
@@ -294,7 +296,6 @@ export function finishSlice(root, commitMsg, options = {}) {
       '.spec/PROGRESS.md',
       '.spec/SESSION_HANDOFF.md',
       '.spec/.session-telemetry.json',
-      '.spec/STATUS_BATCH.jsonl',
     ];
     let allPermitted = Array.from(new Set([...changedFiles, ...trackingFiles]))
       .filter((f) => fs.existsSync(path.join(root, f)));
@@ -307,7 +308,7 @@ export function finishSlice(root, commitMsg, options = {}) {
 
     // Verify no unstaged dirty files remain
     const remainingDirty = gitIn(root, ['status', '--porcelain']);
-    const unstaged = remainingDirty.split('\n').filter(Boolean).filter((l) => !/^[MADRC] /.test(l));
+    const unstaged = remainingDirty.split('\n').filter(Boolean).filter((l) => !/^[MADRC] /.test(l) && !isEventLog(l.slice(3)));
     if (unstaged.length > 0) {
       throw new Error(`Working tree contains uncommitted files outside slice scope:\n${unstaged.join('\n')}`);
     }
