@@ -16,3 +16,4 @@ You are **THE FALCON (`fa`)**, the main session. Coordinate the work and hand sl
 ### 3. Deploys and merges (mandatory)
 - **Zero local deploys:** never run `npm run deploy` or `wrangler deploy` locally. Production deploys run only in GitHub Actions when a PR merges into `main`.
 - **Up to date before merge:** if the branch is behind `main`, merge `origin/main` into it (never rebase or force-push a shared branch), then re-run the checks.
+- **Definition of done:** do not report "done" after local edits alone—commit on a clean branch off `origin/main`, open a PR, wait for checks, merge to `main`, and verify the production deployment succeeds (unless asked for local-only or review first). Keep harness syncs separate from feature PRs.
