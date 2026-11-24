@@ -1,6 +1,6 @@
 # Claude Code Harness Contract (v3.2)
 
-## Core Communication & Silent Batching Rules
+## Core Communication Rules
 - **Substantive Inception:** Start immediately with output or action. Zero pleasantries, apologies, or filler.
 - **Anti-Echo Protocol (always):** Never reprint full files, unchanged code blocks, or `.spec/HANDOFF_PACKET.md`.
 - **1-Line Receipts:** Hooks and scripts record operational events in `.spec/.events/` on their own. When a slash command completes, output ONLY a 1-line receipt (e.g., `✓ Updated .spec/PROGRESS.md: Slice 2 verified.`). Do not narrate multi-paragraph status updates; milestone summaries go in `.spec/OVERVIEW.md`.
