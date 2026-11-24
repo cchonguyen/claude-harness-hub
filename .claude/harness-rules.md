@@ -10,11 +10,12 @@
   Needed from you:
   1. [Exact step-by-step action or decision required]
 
-## Model Tiering & Cognitive Modes (Elephant vs. Goldfish)
-- **The Elephant (Planning & Spec Finalization):** Standard `/spec` uses `architect` (**Sonnet**). Complex multi-system planning or spec finalization uses `architect-opus` (**Opus**) based on factual `.spec/SCOUT.md` Level 3 assessment or explicit `/spec opus`. Always announce dispatch: `🐘 Dispatching Elephant subagent (<name>)...`.
-- **The Goldfish (Implementation & Verification):** The `"model": "haiku"` line in `.claude/settings.json` sets the main session only in local Claude Code; project threads ignore that file and run the model the thread was started with. All direct implementation of clearly spec'd slices (`engineer`), `discovery`, `auditor`, and handoff housekeeping (`clerk`) run on **Haiku**. Escalates to `engineer-sonnet` (**Sonnet**) when explicitly requested via `/implement sonnet`.
-- **Opus Strictly Forbidden for Goldfish:** Opus is never dispatched for slice coding, unit testing, PR reviews, or debugging.
-- **Factual Scout Routing:** `/triage` writes factual metrics to `.spec/SCOUT.md`. `evaluate-upshift.mjs` maps these deterministically to level and agent with zero bureaucratic auth tokens.
+## Subagents (from the `harness` plugin)
+- **`harness:el-architect` (Opus):** plans. Use it when requirements are unclear, `Target files:` are unknown, `.spec/BLACK_BOX.md` exists, or `/triage` recorded SCOUT Level 2 or 3.
+- **`harness:gf-coder` (Haiku):** implements one `[IN_PROGRESS]` slice with clear `Target files:`. The main thread reviews its report, verifies, and runs `finish-slice.mjs`.
+- **`harness:gf-navigator` (Haiku):** explores unfamiliar code and keeps the Atlas and line budgets. **`harness:gf-verifier`** runs checks read-only. **`harness:gf-clerk`** does handoff and git housekeeping.
+- Opus is never dispatched for slice coding, tests, PR reviews or debugging.
+- The `"model"` line in `.claude/settings.json` sets the main session only in local Claude Code. Project threads ignore it.
 
 ## Work Modes (read from `.spec/PROGRESS.md`)
 - **Vibe Mode (no `[IN_PROGRESS]` slice, or no `.spec/PROGRESS.md`):** Edit the requested files directly. Do NOT require `/triage` or `/spec` first. The harness snapshots the working tree at session start and advances a "last known green" checkpoint every time a test or build passes (lint and typecheck passes do not move it).
@@ -33,7 +34,7 @@
   - Slice Mode: restores only the active slice's target files to the slice-start checkpoint.
   - Vibe Mode: restores every changed file (outside `.spec/`, `.claude/`, `.harness/`) to the last known green checkpoint. If nothing has passed yet this session, it only lists the changed files; offer that restore to the user instead.
   Then output a `Needed from you:` block offering `/prep-audit diff`. Missing tools or dependencies (exit 127, `command not found`, `No module named`) are not strikes: install the project dependencies and re-run.
-- **Exploration Hint:** When you cannot locate the relevant code within 2 searches, delegate exploration to the `discovery` subagent (Haiku) or built-in Explore agent rather than reading large numbers of unfamiliar files into main context.
+- **Exploration Hint:** When you cannot locate the relevant code within 2 searches, delegate exploration to `harness:gf-navigator` or the built-in Explore agent rather than reading large numbers of unfamiliar files into main context.
 - **Zero Manual Script Burden:** Execute `.harness/scripts/*.mjs` via `node` directly on the user's behalf.
 
 ## Slice Issues
@@ -57,8 +58,8 @@
 - **Contract:** External relief implementors follow `.spec/EXTERNAL_AGENT_RULES.md`. `.spec/AI_STUDIO_RULES.md` is an alias that points to it.
 - **Handoff format:** Every platform overwrites `.spec/SESSION_HANDOFF.md` with the same five fields, including `Last Active Platform`.
 - **Zero-Turn Ingest on Return (`/pickup`):** When `.spec/SESSION_HANDOFF.md` names an external `Last Active Platform`, avoid multi-turn main-thread git exploration:
-  1. Start a fresh session (`/clear`) and run `/pickup` (`node .harness/scripts/baton-pickup.mjs`) or delegate to the `clerk` / `auditor` (Haiku) subagent.
-  2. If the external agent has not yet run quick checks (e.g. AI Studio), run the quick checks from `CLAUDE.md` once via `auditor` (Haiku) and record results in `.spec/SESSION_HANDOFF.md`. If Antigravity already verified and merged under `.spec/EXTERNAL_AGENT_RULES.md` section 4, trust the recorded receipt and proceed directly to the next slice without re-running checks in Claude.
+  1. Start a fresh session (`/clear`) and run `/pickup` (`node .harness/scripts/baton-pickup.mjs`) or delegate to `harness:gf-clerk`.
+  2. If the external agent has not yet run quick checks (e.g. AI Studio), run the quick checks from `CLAUDE.md` once via `harness:gf-verifier` and record results in `.spec/SESSION_HANDOFF.md`. If Antigravity already verified and merged under `.spec/EXTERNAL_AGENT_RULES.md` section 4, trust the recorded receipt and proceed directly to the next slice without re-running checks in Claude.
 - **Engine files:** External agents never edit `.claude/`, `.harness/`, or `.harness-version` in spoke repos. Those change only in this hub repo.
 - **Audit Registry & Relay:** Review findings and verdicts are recorded in `.spec/AUDIT_VERDICT.json` and posted as PR review comments with structured verdicts (`CLEAN` or `NEEDS CHANGES`).
 
