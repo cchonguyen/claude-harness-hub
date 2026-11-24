@@ -100,7 +100,7 @@ The harness splits work across three tiers of agents. They differ in how much co
 - **Elephant (`el-architect`):** A subagent the Falcon starts on demand. It reads the repo, updates `.spec/`, and writes small slices with their target files to `.spec/PROGRESS.md`. It can only exit once `.harness/hooks/el-exit-gate.mjs` passes, and its context is discarded when it finishes.
 - **Goldfish (`gf-*`):** Short-lived subagents. `gf-coder` builds one slice and may edit only that slice's target files. `gf-verifier` runs the quiet checks and the PR scope check. `gf-navigator` compresses `.spec/` files that go over their line caps. `gf-clerk` updates the handoff file and the Referee trailers.
 
-The canonical agent definitions live in `.harness/agents/`. `hub-sync.mjs` compiles them into `.claude/agents/`, `.agents/` and `.harness/agents/runtime-payloads.json`.
+The agent definitions have one source, `plugins/harness/agents/` (what project threads load). `node .harness/scripts/hub-sync.mjs sync-agents` copies them into `.harness/agents/`, `.claude/agents/` and `.agents/`, and compiles `.harness/agents/runtime-payloads.json`. A test fails if a copy drifts.
 
 ### The Context Atlas
 
