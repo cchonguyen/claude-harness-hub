@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { findHarnessRoot, parsePayload, run, ADAPTER } from '../hooks/run.mjs';
 import { STANDING_RULES, sessionStartOutput } from '../hooks/standing-rules.mjs';
 
@@ -130,4 +132,35 @@ test('gf-coder close step: run Verify, then leave [IN_PROGRESS] for finish-slice
   assert.match(coder, /Do not commit, push, or open a pull request/);
   // The v2.2 local close path is retired.
   assert.doesNotMatch(coder, /verify-slice\.sh|accept-slice\.sh|update-state\.mjs/);
+});
+
+function runSetup(home, curlBody) {
+  const bin = fs.mkdtempSync(path.join(os.tmpdir(), 'harness-bin-'));
+  fs.writeFileSync(path.join(bin, 'curl'), `#!/bin/sh\n${curlBody}\n`, { mode: 0o755 });
+  const script = fileURLToPath(new URL('../setup-script.sh', import.meta.url));
+  return spawnSync('bash', [script], { env: { ...process.env, HOME: home, PATH: `${bin}:${process.env.PATH}` }, encoding: 'utf8' });
+}
+
+test('setup script: a failed download installs a stand-in whose SessionStart hook warns the thread, and exits 0', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'harness-home-'));
+  const res = runSetup(home, 'exit 22');
+  assert.equal(res.status, 0);
+  const dest = path.join(home, '.claude', 'skills', 'harness');
+  assert.equal(JSON.parse(fs.readFileSync(path.join(dest, '.claude-plugin', 'plugin.json'), 'utf8')).version, '0.0.0');
+  const hooks = JSON.parse(fs.readFileSync(path.join(dest, 'hooks', 'hooks.json'), 'utf8'));
+  const cmd = hooks.hooks.SessionStart[0].hooks[0].command.replace('${CLAUDE_PLUGIN_ROOT}', dest);
+  const out = JSON.parse(spawnSync('sh', ['-c', cmd], { encoding: 'utf8' }).stdout);
+  assert.equal(out.hookSpecificOutput.hookEventName, 'SessionStart');
+  assert.match(out.hookSpecificOutput.additionalContext, /HARNESS PLUGIN MISSING/);
+});
+
+test('setup script: a failed download keeps an earlier real install untouched', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'harness-home-'));
+  const dest = path.join(home, '.claude', 'skills', 'harness');
+  fs.mkdirSync(path.join(dest, '.claude-plugin'), { recursive: true });
+  fs.writeFileSync(path.join(dest, '.claude-plugin', 'plugin.json'), '{ "name": "harness", "version": "0.3.2" }');
+  const res = runSetup(home, 'exit 22');
+  assert.equal(res.status, 0);
+  assert.match(fs.readFileSync(path.join(dest, '.claude-plugin', 'plugin.json'), 'utf8'), /0\.3\.2/);
+  assert.equal(fs.existsSync(path.join(dest, 'STANDIN')), false);
 });
