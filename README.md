@@ -106,13 +106,7 @@ The agent definitions have one source, `plugins/harness/agents/` (what project t
 
 Each file the agents read has a numbered coordinate. A slice in `.spec/PROGRESS.md` lists the coordinates it needs, so an agent opens only those files and does not have to search the repo. `.spec/ATLAS.md` is the index.
 
-| Sector | Files |
-| --- | --- |
-| `000` Card Catalog | `CLAUDE.md` (000, the rules every thread loads), `AGENTS.md` (010) |
-| `100` Work logs | `.spec/PROGRESS.md` (110), `.spec/archive/HISTORY.md` (120), `.spec/BLACK_BOX.md` (130, only after a failure) |
-| `200` Boundaries | `.spec/boundaries/locks.md` (210), `.spec/boundaries/do-not-build.md` (220) |
-| `300` Contracts | `.harness/config/thresholds.json` (305), referee (310), circuit breaker (320), baton pass (330), review relay (340) |
-| `400` System spec | `.spec/SYSTEM_SPEC.md` (400, design intent), `.spec/HARNESS_SPEC.md` (401, as built), `.spec/DECISIONS.md` (410), plans and post-mortems (440 and up) |
+The sectors are 000 (agent instructions), 100 (work dispatch), 200 (boundaries), 300 (contracts) and 400 (system spec, decisions, plans). The one table of coordinates is [`.spec/ATLAS.md`](.spec/ATLAS.md).
 
 Most Atlas files have a soft line cap in `thresholds.json`. `npm run lint` reports any file that goes over its cap. The full definition, including the staleness rule, is in [docs/CONTEXT_ATLAS.md](docs/CONTEXT_ATLAS.md).
 
