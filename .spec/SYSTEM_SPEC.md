@@ -156,16 +156,15 @@ Source: Operator RFC, Antigravity adversarial review, and Claude architectural r
 ### 5.A Cognitive Separation: Elephant vs. Goldfish
 1. **The Elephant (Planning, Architecture, Spec Finalization):**
    - Active during discovery, architecture design, major refactoring, and locking `.spec/` documentation (`SYSTEM_SPEC.md`, `DECISIONS.md`, `OVERVIEW.md`, `PROGRESS.md`).
-   - Uses `architect` (Sonnet) by default, and `architect-opus` (Opus) when deep architectural synthesis is needed.
-   - Entry flow: `/triage` acts as a factual Scout writing `.spec/SCOUT.md` (`Files-Touched`, `Contract-Change`, `Cross-Module`). `evaluate-upshift.mjs` maps these fields via a deterministic table to Scout-Level (1: Goldfish `/quick-fix`, 2: Sonnet `architect`, 3: Opus `architect-opus`). Opus is dispatched only when `SCOUT.md` is Level 3 or explicit `/spec opus` was passed.
+   - Uses `harness:el-architect` (Opus).
+   - Entry flow: `/triage` acts as a factual Scout writing `.spec/SCOUT.md` (`Files-Touched`, `Contract-Change`, `Cross-Module`). `evaluate-upshift.mjs` maps these fields to Scout-Level (1: `harness:gf-coder` or a quick fix; 2 and 3: `harness:el-architect`).
    - Goal: Leave behind self-contained contracts and atomic (`<5` target files), risk-tagged slices in `.spec/PROGRESS.md` so implementation requires zero long-horizon memory.
 2. **The Goldfish (Stateless Implementation & Review):**
    - Handles all day-to-day slice implementation, unit testing, PR scope reviews, and debugging.
-   - Runs on Haiku baseline (`engineer`, `auditor`, `clerk`), Hydrogen (inherit) / Gemini Pro in Antigravity/AI Studio, or Sonnet (`engineer-sonnet`) when escalated.
+   - Runs on Haiku (`harness:gf-coder`, `gf-verifier`, `gf-clerk`, `gf-navigator`), or Gemini in Antigravity/AI Studio.
    - **Hard Rule: Opus is never used for Goldfish work.**
 3. **Dispatch Sizing & Mechanical Guard:**
-   - Guard 0 in `pre-tool-guard.mjs` mechanically verifies subagent dispatch against `.spec/SCOUT.md`: `architect-opus` is blocked unless `SCOUT.md` specifies Level 3, and `engineer-sonnet` is blocked unless `SCOUT.md` specifies Level 2 or 3.
-   - **Status:** Guard 0 is no longer in `pre-tool-guard.mjs`; nothing checks dispatch against `SCOUT.md`. The `architect-opus` and `engineer-sonnet` agents live only in `.claude/agents/`, which project threads do not load.
+   - Nothing checks dispatch against `SCOUT.md` (the old Guard 0 is gone). The v3.1 agents (`architect`, `architect-opus`, `engineer`, `engineer-sonnet`, `auditor`, `clerk`, `discovery`) were retired in Slice 20.9.
    - Agents announce dispatch on Line 1: `🐘 Dispatching Elephant subagent (<name>)...` or `🐠 Dispatching Goldfish subagent (<name>)...`.
 
 ### 5.B Neutral Referee & Verification Trailers
