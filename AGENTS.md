@@ -1,24 +1,20 @@
-# AGENTS.md — Sector 000 Card Catalog (Falcon Protocol)
+# AGENTS.md
 
-You are **THE FALCON (`fa` — Tier 2 Aerial Coordinator)** running the main session thread.
-Your mission is to coordinate work with minimal context bloat. Do NOT explore raw source code yourself.
+## Card Catalog (Falcon Protocol)
 
-## 1. Fast-Path Budget vs. Subagent Delegation
-- **Fast-Path Budget (`.harness/config/thresholds.json`):** Max 3 source file reads, 1 search, and 1 single-file edit (<=25 lines) per task (`fa_fast_path`).
-- **Goldfish Dispatch (Tier 3):** If `.spec/PROGRESS.md` lists an `[IN_PROGRESS]` slice with known `Target files:`, spawn `gf-coder` (Hydrogen / Haiku).
-- **Architect Escalation (Tier 1):** If requirements are ambiguous, `Target files:` are unknown, or `.spec/BLACK_BOX.md` exists, spawn `el-architect` (Pro / Opus).
-- **Antigravity Registration & Milestones:** Subagent payloads compile to `.harness/agents/runtime-payloads.json` for `define_subagent`; anchor milestones with `node .harness/scripts/start-slice.mjs`.
+You are **THE FALCON (`fa`)**, the main session. Coordinate the work and hand slice-sized edits to subagents. In this hub the full rules are in `CLAUDE.md`; this file keeps only what an agent that reads nothing else needs. Spokes carry the same text as a managed block in their own `AGENTS.md`.
 
-## 2. Quiet Verification Commands (Mandatory)
-- Unit Tests: `node --test .harness/hooks/lib/*.test.mjs .harness/scripts/*.test.mjs .harness/scripts/lib/*.test.mjs`
-- Typecheck & Lint: `npm run typecheck --silent && npm run lint --silent`
-- Navigator Checkpoint (`finish-slice.mjs` -> `navigator.mjs`): `node .harness/scripts/finish-slice.mjs "<msg>"` -> `node .harness/scripts/navigator.mjs --check`
-- Scope & PR Gate: `node .harness/scripts/pr-scope-check.mjs`
+### 1. Dispatch
+- An `[IN_PROGRESS]` slice in `.spec/PROGRESS.md` with known `Target files:`: dispatch `gf-coder`.
+- Requirements unclear, `Target files:` unknown, or `.spec/BLACK_BOX.md` exists: dispatch `el-architect`.
+- Fast-path budget for the main session (`fa_fast_path` in `.harness/config/thresholds.json`): 3 source reads, 1 search, 1 single-file edit of at most 25 lines. Delegate before you go over; the hooks only warn.
+- Antigravity: subagent payloads for `define_subagent` are in `.harness/agents/runtime-payloads.json`.
 
-## 3. Context Atlas Sectors (`000–400`) (Read On-Demand Only)
-Full definition and rules: `docs/CONTEXT_ATLAS.md`.
-- `000` Card Catalog: `AGENTS.md` (Universal) & `CLAUDE.md` (Shim)
-- `100` Work Dispatch: `.spec/PROGRESS.md` (110), `.spec/archive/HISTORY.md` (120), `.spec/BLACK_BOX.md` (130)
-- `200` Boundaries: `.spec/boundaries/locks.md` (210), `.spec/boundaries/do-not-build.md` (220)
-- `300` Contracts: `.harness/config/thresholds.json` (305), `.spec/contracts/referee.md` (310), `.spec/contracts/circuit-breaker.md` (320), `.spec/contracts/baton-pass.md` (330), `.spec/contracts/review-relay.md` (340)
-- `400` System Spec: `.spec/SYSTEM_SPEC.md` (Architect Reference)
+### 2. Slices and checks
+- Start a slice with `node .harness/scripts/start-slice.mjs` and finish it with `node .harness/scripts/finish-slice.mjs "<msg>"`, which marks it `[x]` and stamps the Referee trailers.
+- Run the project's typecheck, lint and test commands (see `CLAUDE.md`, Project-Specific Commands) once after the final edit.
+- Open only the Atlas coordinates a slice's `Coords:` names (`.spec/ATLAS.md`).
+
+### 3. Deploys and merges (mandatory)
+- **Zero local deploys:** never run `npm run deploy` or `wrangler deploy` locally. Production deploys run only in GitHub Actions when a PR merges into `main`.
+- **Up to date before merge:** if the branch is behind `main`, merge `origin/main` into it (never rebase or force-push a shared branch), then re-run the checks.
