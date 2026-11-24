@@ -42,7 +42,7 @@ The harness is a reusable kit of hooks, subagent definitions, scripts and spec c
 | Coordinator | Project chat session on claude.ai | Start threads, relay operator messages, read threads | Edit repos directly; see thread containers |
 | Thread session | Ephemeral cloud container, one per thread | Git, Node, tests, GitHub MCP, `gh` for search only, subagents | Read repo `.claude/settings.json`, repo agents or repo commands (see 2.2) |
 | Subagent | Spawned inside a thread by the Agent tool | Work under its own model and tool list | Talk to the operator |
-| GitHub Actions | GitHub | CI checks, plan acceptance, automerge with `GITHUB_TOKEN`, status snapshot | Reach containers or the Mac |
+| GitHub Actions | GitHub | CI checks, plan acceptance, status snapshot | Reach containers or the Mac |
 | Mac session | Operator's Mac via Remote Control or folder access | Local dashboard, local checkout | Bypass the Mac's auto-mode classifier |
 | Antigravity / AI Studio | Google tools, operator-driven | Same repo via git; `.agents/hooks.json` adapter | Use claude.ai project tools |
 
@@ -177,7 +177,7 @@ Naming: `CLAUDE.md` calls the main thread "the main thread"; `AGENTS.md` calls i
 | `/tmp/harness-session-state.json` | `session-start.mjs`, `doctor.mjs` | `pre-tool-guard`, `bash-guard` | Container | No |
 | `.spec/.vibe-checkpoint.json`, `refs/harness/*` | `vibe.mjs` | `--restore` | Container | No |
 | `.spec/STATUS_BATCH.jsonl` | retired in Slice 20.10; `status-batch.mjs` now writes to `.spec/.events/` | none | Container | No |
-| `status.json` on GitHub Pages | `status-snapshot.yml` every 5 min and after automerge | Hosted status page | Permanent | Pages branch |
+| `status.json` on GitHub Pages | `status-snapshot.yml` every 5 min | Hosted status page | Permanent | Pages branch |
 | `/mnt/project-files/harness-hub/**` | Threads | Threads, operator | Project | No (shared folder) |
 | Project memory `team/silo/*.md` | Threads, coordinator | Every session at start | Project | No |
 
@@ -212,8 +212,8 @@ Only rows marked "Permanent" survive a container. Everything the self-audit need
 3. **Implement:** main thread dispatches `harness:gf-coder` with the slice line and Verify command.
 4. **Finish:** `node .harness/scripts/finish-slice.mjs "<msg>"` runs scope checks against `HEAD:.spec/PROGRESS.md` (warnings only; see 5.2), marks `[x]`, stamps `Referee-Verdict: VERIFIED`, `Referee-Tree`, `Referee-Engine`, `Telemetry-*`, `Main-Thread-Writes:` and `Scope-Widened:` trailers, commits. Auto-advance to the next slice was removed (PR #110). CI is the only verifier and is recorded as such (PR #97; the local `verify-slice.sh` and `accept-slice.sh` path was retired in Slice 20.7).
 5. **Approve:** a plan file in `.spec/plans/` lists slices; merging it records the approval. `accept-plan.yml` only validates that the plan's slices exist (`accept-plan.mjs --check`) and never pushes to `main`. Done means merged. Slice ids may carry a letter suffix (`10.7b`) and a slice line may carry `Issue: #N`.
-6. **Merge:** standing rule says merge green approved PRs automatically. Two mechanisms exist: a thread calls GitHub MCP `merge_pull_request` (records the operator as merger), or a thread adds label `harness:automerge` and `automerge.yml` merges with `GITHUB_TOKEN` as `github-actions[bot]` and dispatches the status snapshot. No PR from #89 to #117 carries the label.
-7. **CI on the hub:** `harness-verify.yml` (job `verify`: full tests, typecheck, lint) and `quick-checks.yml` (job `checks`: typecheck, lint, one test file). `accept-plan.yml`, `automerge.yml`, `status-snapshot.yml`. No branch protection; no required checks are enforced by GitHub.
+6. **Merge:** standing rule says merge green approved PRs automatically. A thread calls GitHub MCP `merge_pull_request` (records the operator as merger). The `harness:automerge` label workflow was retired in Slice 20.241.
+7. **CI on the hub:** `harness-verify.yml` (job `verify`: full tests, typecheck, lint) and `quick-checks.yml` (job `checks`: typecheck, lint, one test file). `accept-plan.yml`, `status-snapshot.yml`. No branch protection; no required checks are enforced by GitHub.
 
 ---
 
@@ -311,7 +311,7 @@ Or leave no issues in Ready. The routine then does nothing.
 | Row above | Status |
 |---|---|
 | CLAUDE.md "enforce a fast-path budget" | Fixed in the docs audit PR: CLAUDE.md now says the budget warns to stderr only |
-| "The `Harness slice gate` check must pass" | Still open in the hub. The reusable gate lives here (`.github/workflows/harness-gate.yml`, Slice 19.2) and spokes call it, but no hub workflow calls it. PR #208 ran `pr-check`, `checks`, `verify`, `status` and `record`, with no gate check |
+| "The `Harness slice gate` check must pass" | Settled 2026-11-24: the hub does not run it on its own PRs, and CLAUDE.md says so. The reusable gate lives here (`.github/workflows/harness-gate.yml`, Slice 19.2) and spokes call it, but no hub workflow calls it. PR #208 ran `pr-check`, `checks`, `verify`, `status` and `record`, with no gate check |
 | Banner "Model tier: Haiku baseline" | Fixed in the docs audit PR (`session-start.mjs`) |
 | Stale Antigravity handoff | Went stale again after PR #172; rewritten in the docs audit PR |
 | SYSTEM_SPEC 4 "not yet built" | Fixed in the docs audit PR |
@@ -320,9 +320,9 @@ Or leave no issues in Ready. The routine then does nothing.
 | PROGRESS line cap vs bytes | No longer biting: finished slices are archived and PROGRESS.md is short |
 | Missing checkboxes, duplicate ids | Fixed (Slices 12.1 and 19.7) |
 | Stop hook inert | Fixed: rewritten in Slices 19.1 and 19.196 to 19.205 |
-| Setup script exits 0 on failure | Still open |
+| Setup script exits 0 on failure | Fixed in Slice 20.239: still exits 0, but installs a stand-in plugin that warns each thread |
 | `bin/restart-dashboard.sh` allow-listed | Still open: the file does not exist and `main-thread-guard.mjs` still allow-lists it |
-| Slice 11.11 removes Referee checks | Still not landed; Referee trailers are stamped and checked |
+| Slice 11.11 removes Referee checks | Retired 2026-11-24: `finish-slice.mjs` stamps the trailers, so the checks stay |
 | Soft-gate warnings unseen by the model (section 5.3) | Partly fixed (Slice 19.1): PLAN LOCK and SCOPE LOCK now reach the model as additionalContext. Fast-path, main-thread and doctor warnings still go to stderr only |
 
 ---
