@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
@@ -16,34 +15,9 @@ const gitIn = (cwd, args) =>
 
 export const CI_VERIFIED_REASON = 'CI-verified: the "pr-check" check on the pull request (.github/workflows/harness-pr-check.yml) is the verifier';
 
-/**
- * Runs bin/verify-slice.sh as an optional manual step when the operator's verify secret is on this machine.
- * Without a secret, finish-slice does not need one: CI is the verifier. Never throws.
- */
-export function autoVerify(root) {
-  const secret = process.env.HARNESS_VERIFY_SECRET || readVerifySecret();
-  if (!secret) return { ran: false, verifier: 'ci', reason: CI_VERIFIED_REASON };
-  const script = path.join(root, 'bin', 'verify-slice.sh');
-  if (!fs.existsSync(script)) return { ran: false, reason: 'bin/verify-slice.sh not found' };
-  try {
-    execFileSync('bash', [script], {
-      cwd: root,
-      stdio: ['ignore', 'pipe', 'pipe'],
-      encoding: 'utf8',
-      env: { ...process.env, HARNESS_VERIFY_SECRET: secret },
-    });
-    return { ran: true, passed: true };
-  } catch (err) {
-    return { ran: true, passed: false, reason: String(err.stderr || err.message || 'verify-slice.sh failed').trim().split('\n').slice(-3).join(' ') };
-  }
-}
-
-function readVerifySecret() {
-  try {
-    return fs.readFileSync(path.join(os.homedir(), '.config', 'vibe-command-center', 'verify-secret'), 'utf8').trim();
-  } catch {
-    return '';
-  }
+/** CI is the only verifier: finish-slice records that and never runs a local gate. */
+export function ciVerification() {
+  return { ran: false, verifier: 'ci', reason: CI_VERIFIED_REASON };
 }
 
 export function parseActiveTargets(line) {
@@ -176,7 +150,7 @@ function runChecks(root) {
 }
 
 export function finishSlice(root, commitMsg, options = {}) {
-  const verify = options.verify || autoVerify;
+  const verify = options.verify || ciVerification;
   ensureHarnessRoot();
   root = root || resolveRoot();
 
@@ -363,7 +337,7 @@ export function finishSlice(root, commitMsg, options = {}) {
     gitIn(root, ['commit', '-m', commitMsg, ...trailers]);
     committed = true;
     const commitSha = gitIn(root, ['log', '-1', '--oneline']);
-    // Auto-verify: a passing run advances the card to Verified. Runs after the commit, so a failure never undoes it.
+    // Records CI as the verifier. Runs after the commit, so a test-injected failure never undoes it.
     const verification = verify(root);
 
     // 9. Natural lull check
